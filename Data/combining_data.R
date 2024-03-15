@@ -40,8 +40,6 @@ installments_payments <- installments_payments %>% rename_with(~ paste0(., "_ip"
 pos_cash_balance <- pos_cash_balance %>% rename_with(~ paste0(., "_pcb"), everything())
 previous_application <- previous_application %>% rename_with(~ paste0(., "_pa"), everything())
 
-# combining into one large dataset using common foreign keys on a few policies
-
 ############## combining Home Credit data on one policy number ##############
 # does not include bureau data
 # policy number = 100002
@@ -135,8 +133,16 @@ f <- d %>%
   left_join(., e, by = c("sk_id_curr_a"), suffix = c("c","c2")) %>%
   mutate(diff = countc2 - countc)
 
+# going to forgo merging bureau and bureau_balance to the merged Home Credit data set
+# bureau_balance doesn't offer any new information - already contained within bureau
+# bureau contains information about application data from previous loans that clients applied for at other
+# financial institutions
+# however, this data only shows when an applicant got approved for a loan at another financial institution
+# there is no information about why or whether an applicant got rejected for a loan application elsewhere
+# there is also no information about whether the applicant defaulted on a loan from another financial institution
+# combined_4 also contains information on bureau data, which is why the bureau dataset doesn't contain
+# a lot of predictive power
 
-
-
-# joining bureau to combined_small_4
-# going to follow the same logic as above to get a 1-to-1 relationship
+# saving out the combined Home Credit dataset
+combined_4_data <- saveRDS(combined_4, file = "/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/combined_data.rds")
+combined_4_data_csv <- write_csv(combined_4, file = "/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/combined_data.csv")
