@@ -52,10 +52,25 @@ greater_than_90p_na <- missing_counts$variable[missing_counts$missing_count_perc
 home_credit_2 <- home_credit %>%
   select(-all_of(greater_than_90p_na))
 
-# variables containing information about where a client lives
+# variables containing information about the building the client lives in
+# contains a lot of missing data and not very predictive in determining whether a client will default or not
+# will be dropping the avg, mode, and median metrics for the building the client lives in
 
-
-
+building_info <- c('commonarea_avg_a', 
+                   'commonarea_mode_a',
+                   'commonarea_medi_a',
+                   'nonlivingapartments_avg_a',
+                   'nonlivingapartments_mode_a',
+                   'nonlivingapartments_medi_a',
+                   'livingapartments_avg_a',
+                   'livingapartments_mode_a',
+                   'livingapartments_medi_a',
+                   'floorsmin_avg_a',
+                   'floorsmin_mode_a',
+                   'floorsmin_medi_a',
+                   'basementarea_avg_a',
+                   'basementarea_mode_a',
+                   'basementarea_median_a')
 
 # filtering on variables that have more than 50% missing values
 
@@ -76,9 +91,13 @@ home_credit_2 <- home_credit %>%
 # continuous-continuous: correlations between the continuous independent variables
 # categorical-target (dependent variable)
 # continuous-target (dependent variable)
+# vif
 
 ######### finding outliers #########
 # using box-and-whisker plots for visualization
+# another metric to determine outliers - Cook's distance
+# interquartile range check (max = 1.5xIQ + 3rd quartile, min = ?)
+# we have to be careful because clients that default may have some "outlier" inputs for certain variables
 
 
 
@@ -86,6 +105,70 @@ home_credit_2 <- home_credit %>%
 
 
 ######### conducting exploratory data analysis #########
+
+# installing necessary packages
+# install.packages("gridExtra")
+library(tidyverse)
+library(gridExtra)
+
+# reading in the data
+application <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/application_data.csv", 
+                        col_names = TRUE)
+
+# converting column names to lower case for each dataset
+colnames(application) <- str_to_lower(colnames(application))
+
+# renaming columns by appending dataset initials to the end of each column in each dataset
+application <- application %>% rename_with(~ paste0(., "_a"), everything())
+
+# count of defaulters vs non-defaulters for categorical variables in a graph and table
+combined <- function(data, variable){
+  variable <- enquo(variable)
+  
+  graph <- data %>%
+    mutate(target_a = factor(target_a)) %>%
+    group_by(!!variable, target_a) %>%
+    summarize(n = n(), .groups = "drop") %>% # suppress warning message
+    ggplot(aes(x = !!variable, y = n, fill = target_a)) +
+    geom_bar(stat = "identity") +
+    labs(y = "Count") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  table <- data %>%
+    group_by(!!variable, target_a) %>%
+    summarize(n = n(), .groups = "drop") %>%
+    pivot_wider(., names_from = target_a, values_from = n) %>%
+    mutate(across(everything(), ~ifelse(is.na(.), 0, .))) %>%
+    mutate(default_rate = round(.[ , c(3)] / rowSums(.[ , c(2, 3)]), 2))
+  
+  table <- tableGrob(table)
+  
+  combined <- grid.arrange(table, graph, nrow = 2)
+}
+
+
+# categorical variables: exploratory analysis
+contract_type <- combined(application, name_contract_type_a) # mostly cash loans, higher default rate w cash loans
+gender <- combined(application, code_gender_a) # women take out much more number of loans than men
+# women have a lower default rate too
+own_car <- combined(application, flag_own_car_a) # most clients do not own a car
+own_real_estate <- combined(application, flag_own_realty_a) # most clients own a home
+# interestingly, those that own real estate have a higher default rate
+
+x <- head(application)
+
+
+# graph <- function(variable){
+#   home_credit_2 %>%
+#     mutate(variable = cut(variable, breaks = 10),
+#            target_a = factor(target_a)) %>%
+#     group_by(paste0(variable, "_group"), target_a) %>%
+#     summarize(n = n(), .groups = "drop") %>% # suppress warning message
+#     ggplot(aes(x = paste0(variable, "_group"), y = n, fill = target_a)) +
+#     geom_bar(stat = "identity") +
+#     labs(title = "Bar Plot", y = "Count") +
+#     theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# }
 
 
 
