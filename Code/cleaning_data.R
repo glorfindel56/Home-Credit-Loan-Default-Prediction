@@ -166,6 +166,13 @@ housing_type <- combined(application, "name_housing_type_a") # not very helpful 
 own_car_age <- combined(application, "own_car_age_a") # most entries are NAs, drop the var
 mobile_flag <- combined(application, "flag_mobil_a") # most entries are in the 1 group, drop the var
 
+table <- application %>%
+  group_by(organization_type_a, target_a) %>%
+  summarize(n = n(), .groups = "drop") %>%
+  pivot_wider(., names_from = target_a, values_from = n) %>%
+  mutate(default_rate = round(.[ , c(3)] / rowSums(.[ , c(2, 3)]), 2))
+
+
 # creating a list of categorical variables that need to be inspected w exploratory analysis
 cat_var <- c("flag_emp_phone_a", "flag_work_phone_a", "flag_cont_mobile_a", 
              "flag_phone_a", "flag_email_a", "occupation_type_a",
@@ -221,27 +228,58 @@ combined_2 <- function(data, variable){
     mutate(!!sym(variable) := if_else(is.na(!!sym(variable)), "missing", "not missing")) %>%
     group_by(!!sym(variable)) %>%
     summarize(n = n(), .groups = "drop") %>%
-    mutate(percentage_missing = round(n / sum(n), 2))
+    mutate(percentage = round(n / sum(n), 4))
   
   table <- tableGrob(table)
   
   combined_2 <- grid.arrange(table, graph, nrow = 2)
 }
 
+
+# get rid of scientific notation
+scipen(option = 99999)
+
 # continuous variables: exploratory analysis
 ext_source_1_a <- combined_2(application, "ext_source_1_a") # density function looks really different between the two!
 ext_source_2_a <- combined_2(application, "ext_source_2_a") # looks different between the two
 ext_source_3_a <- combined_2(application, "ext_source_3_a") # does not look different between the two 
+credit <- combined_2(application, "amt_credit_a")
+age <- combined_2(application, "days_birth_in_years_a") # surprisingly no difference
+years_employed <- combined_2(application, "days_employed_in_years_a")
 
 
 
 
+cols_not_in_vector <- colnames(application)[!(colnames(application) %in% cat_var)]
+
+"amt_credit_a"                  
+[10] "amt_annuity_a"                  "amt_goods_price_a"                          
+[16] "name_housing_type_a"            "region_population_relative_a"                    
+[19] "days_employed_a"                "days_registration_a"            "days_id_publish_a"             
+[22] "own_car_age_a"                  "flag_mobil_a"                   "ext_source_1_a"                
+[25] "ext_source_2_a"                 "ext_source_3_a"                 "apartments_avg_a"              
+[28] "basementarea_avg_a"             "years_beginexpluatation_avg_a"  "years_build_avg_a"             
+[31] "commonarea_avg_a"               "elevators_avg_a"                "entrances_avg_a"               
+[34] "floorsmax_avg_a"                "floorsmin_avg_a"                "landarea_avg_a"                
+[37] "livingapartments_avg_a"         "livingarea_avg_a"               "nonlivingapartments_avg_a"     
+[40] "nonlivingarea_avg_a"            "apartments_mode_a"              "basementarea_mode_a"           
+[43] "years_beginexpluatation_mode_a" "years_build_mode_a"             "commonarea_mode_a"             
+[46] "elevators_mode_a"               "entrances_mode_a"               "floorsmax_mode_a"              
+[49] "floorsmin_mode_a"               "landarea_mode_a"                "livingapartments_mode_a"       
+[52] "livingarea_mode_a"              "nonlivingapartments_mode_a"     "nonlivingarea_mode_a"          
+[55] "apartments_medi_a"              "basementarea_medi_a"            "years_beginexpluatation_medi_a"
+[58] "years_build_medi_a"             "commonarea_medi_a"              "elevators_medi_a"              
+[61] "entrances_medi_a"               "floorsmax_medi_a"               "floorsmin_medi_a"              
+[64] "landarea_medi_a"                "livingapartments_medi_a"        "livingarea_medi_a"             
+[67] "nonlivingapartments_medi_a"     "nonlivingarea_medi_a"           "totalarea_mode_a"              
+[70] "emergencystate_mode_a"          "days_last_phone_change_a"      
 
 
 
 ######### binning, capping, and transforming variables #########
 application <- application %>%
-  mutate(cnt_children_capped_a = if_else(cnt_children_a >=5, "5+", as.factor(cnt_children_a)))
+  mutate(cnt_children_capped_a = if_else(cnt_children_a >=5, "5+", as.factor(cnt_children_a)),
+         days_birth_in_years_a = floor(-days_birth_a / 365.25))
 
 # need to transform days_birth_a, days_employed_a, days_registration_a, days_id_publish_a
 
