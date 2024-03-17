@@ -121,6 +121,10 @@ colnames(application) <- str_to_lower(colnames(application))
 # renaming columns by appending dataset initials to the end of each column in each dataset
 application <- application %>% rename_with(~ paste0(., "_a"), everything())
 
+# any duplicate rows in the application dataset?
+# no duplicate rows, all distinct policy ID numbers
+n_distinct(application$sk_id_curr_a)
+
 # count of defaulters vs non-defaulters for categorical variables in a graph and table
 combined <- function(data, variable){
   
@@ -131,16 +135,13 @@ combined <- function(data, variable){
     mutate(!!sym(variable) := factor(!!sym(variable))) %>%
     ggplot(aes(x = !!sym(variable), y = n, fill = target_a)) +
     geom_bar(stat = "identity", na.rm = TRUE) +
-    labs(y = "Count") +
+    labs(y = "Count", title = "Number of Loans - Repaid vs Defaulted") +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
   
   table <- data %>%
     group_by(!!sym(variable), target_a) %>%
     summarize(n = n(), .groups = "drop") %>%
-    # mutate(n = if_else(is.na(.), 0, .)) %>%
     pivot_wider(., names_from = target_a, values_from = n) %>%
-    # mutate(across(everything(), ~ifelse(is.na(.), 0, .))) %>%
-    # mutate(!!variable := if_else(!!variable == 0, "NA", !!variable)) %>%
     mutate(default_rate = round(.[ , c(3)] / rowSums(.[ , c(2, 3)]), 2))
   
   table <- tableGrob(table)
@@ -199,22 +200,41 @@ for (i in cat_var) {
 # obs_60_cnt_social_circle_a (cap at 5), 
 
 # variables to drop based on exploratory analysis
-application_vars_drop <- c("name_type_suite_a", "housing_type", "own_car_age_a",
-                           "flag_mobil_a")
+application_vars_drop <- c("flag_mobil_a")
 
 x <- head(application)
 
-# graph <- function(variable){
-#   home_credit_2 %>%
-#     mutate(variable = cut(variable, breaks = 10),
-#            target_a = factor(target_a)) %>%
-#     group_by(paste0(variable, "_group"), target_a) %>%
-#     summarize(n = n(), .groups = "drop") %>% # suppress warning message
-#     ggplot(aes(x = paste0(variable, "_group"), y = n, fill = target_a)) +
-#     geom_bar(stat = "identity") +
-#     labs(title = "Bar Plot", y = "Count") +
-#     theme(axis.text.x = element_text(angle = 45, hjust = 1))
-# }
+# defaulters vs non-defaulters for continuous variables in a graph
+combined_2 <- function(data, variable){
+  
+  graph <- data %>%
+    filter(!is.na(!!sym(variable))) %>%
+    mutate(target_a = factor(target_a)) %>%
+    group_by(!!sym(variable), target_a) %>%
+    summarize(n = n(), .groups = "drop") %>% # suppress warning message
+    ggplot(aes(x = !!sym(variable), fill = target_a)) +
+    geom_density(alpha = 0.5) +
+    labs(y = "Density", title = "Number of Loans - Repaid vs Defaulted") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  table <- data %>%
+    mutate(!!sym(variable) := if_else(is.na(!!sym(variable)), "missing", "not missing")) %>%
+    group_by(!!sym(variable)) %>%
+    summarize(n = n(), .groups = "drop") %>%
+    mutate(percentage_missing = round(n / sum(n), 2))
+  
+  table <- tableGrob(table)
+  
+  combined_2 <- grid.arrange(table, graph, nrow = 2)
+}
+
+# continuous variables: exploratory analysis
+ext_source_1_a <- combined_2(application, "ext_source_1_a") # density function looks really different between the two!
+ext_source_2_a <- combined_2(application, "ext_source_2_a") # looks different between the two
+ext_source_3_a <- combined_2(application, "ext_source_3_a") # does not look different between the two 
+
+
+
 
 
 
@@ -229,6 +249,7 @@ application <- application %>%
 
 ######### creating new variables from existing variables #########
 
+home_credit <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/combined_data.csv")
 
 
 
