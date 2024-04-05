@@ -1,26 +1,22 @@
 library(tidyverse)
+library(here)
+
+application_fp <- here("Data", "application_data.csv")
+bureau_fp <- here("Data", "bureau.csv")
+bureau_balance_fp <- here("Data", "bureau_balance.csv")
+credit_card_balance_fp <- here("Data", "credit_card_balance.csv")
+installments_payments_fp <- here("Data", "installments_payments.csv")
+pos_cash_balance_fp <- here("Data", "POS_CASH_balance.csv")
+previous_application_fp <- here("Data", "previous_application.csv")
 
 # reading in the datasets from Home Credit
-application <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/application_data.csv", 
-                        col_names = TRUE)
-
-bureau <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/bureau.csv", 
-                   col_names = TRUE)
-
-bureau_balance <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/bureau_balance.csv",
-                           col_names = TRUE)
-
-credit_card_balance <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/credit_card_balance.csv",
-                                col_names = TRUE)
-
-installments_payments <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/installments_payments.csv",
-                                  col_names = TRUE)
-
-pos_cash_balance <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/POS_CASH_balance.csv",
-                             col_names = TRUE)
-
-previous_application <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/previous_application.csv",
-                                 col_names = TRUE)
+application <- read_csv(application_fp, col_names = TRUE)
+bureau <- read_csv(bureau_fp, col_names = TRUE)
+bureau_balance <- read_csv(bureau_balance_fp, col_names = TRUE)
+credit_card_balance <- read_csv(credit_card_balance_fp, col_names = TRUE)
+installments_payments <- read_csv(installments_payments_fp, col_names = TRUE)
+pos_cash_balance <- read_csv(pos_cash_balance_fp, col_names = TRUE)
+previous_application <- read_csv(previous_application_fp, col_names = TRUE)
 
 # converting column names to lower case for each dataset
 colnames(application) <- str_to_lower(colnames(application))
@@ -144,5 +140,7 @@ f <- d %>%
 # a lot of predictive power
 
 # saving out the combined Home Credit dataset
-combined_4_data <- saveRDS(combined_4, file = "/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/combined_data.rds")
-combined_4_data_csv <- write_csv(combined_4, file = "/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/combined_data.csv")
+combined_data_export_rds__fp <- here("Data", "CombinedData", "combined_data.rds")
+combined_data_export_csv__fp <- here("\Data", "CombinedData", "combined_data.csv")
+combined_4_data <- saveRDS(combined_4, file = combined_data_export_rds__fp)
+combined_4_data_csv <- write_csv(combined_4, file = combined_data_export_csv__fp)
