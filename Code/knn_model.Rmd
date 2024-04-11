@@ -1,5 +1,5 @@
 ---
-title: "knn_model"
+title: "knn model"
 output:
   html_document: default
   word_document:
@@ -9,10 +9,10 @@ output:
     reference_docx: hw_template.docx
 ---
 
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(kernlab)
+library(caret)
 library(dplyr)
 library(tidyverse)
 library(kknn)
@@ -21,35 +21,70 @@ library(GGally)
 library(factoextra)
 ```
 
-importing data
+importing data and creating dummy variables for categorical values
+
 ```{r importing data,results='hide',message=FALSE,cache=TRUE}
-cc_data <-read_tsv(file = "../data 3.1/credit_card_data-headers.txt",col_names = TRUE)
+app_data <-read_csv(file = "/Users/kfung/Library/CloudStorage/Box-Box/MGT 6203/application_imputed.csv",col_names = TRUE)
+
+#remove ...1 and other cols from data
+#removing CODE_GENDER_NUM etc bc will create indicator variable below, MARRIED IS NOT USEFUL
+data <- subset(app_data,select=-c(CODE_GENDER_NUM,AGE_IN_YEARS_NUM,HAS_CHILDREN_NUM,MARRIED,MARRIED_NUM,INCOME_BRACKET_NUM,EDUCATION_LEVEL_NUM))
+
+#impute OCCUPATION_TYPE
+# Convert OCCUPATION_TYPE to factor
+data$OCCUPATION_TYPE <- as.factor(data$OCCUPATION_TYPE)
+
+# Add "Unknown" as a level to the factor
+data$OCCUPATION_TYPE <- factor(data$OCCUPATION_TYPE, levels = c(levels(data$OCCUPATION_TYPE), "Unknown"))
+# Replace NAs with "Unknown"
+data$OCCUPATION_TYPE[is.na(data$OCCUPATION_TYPE)] <- "Unknown"
+#can check imputation, there are 96389 unknowns
+#table(data$OCCUPATION_TYPE)
+
+cat_vars <-c("CODE_GENDER","NAME_CONTRACT_TYPE","FLAG_OWN_CAR","NAME_EDUCATION_TYPE","NAME_FAMILY_STATUS","OCCUPATION_TYPE","EDUCATION_LEVEL","AGE_BUCKET","INCOME_BRACKET")
+# Loop over each categorical variable and create dummy variables
+for (var in cat_vars) {
+  print(paste("cur var:", var))
+  # Create dummy variables using model.matrix
+  dummy_variables <- model.matrix(~ . - 1, data = data[, var, drop = FALSE])
+  
+  # Bind the dummy variables to the original data frame
+  data <- cbind(data, dummy_variables)
+}
+
+# Remove the original categorical variables
+data <- data[, !names(data) %in% cat_vars, drop = FALSE]
+
+#write.csv(data,file = "/Users/kfung/Library/CloudStorage/Box-Box/MGT 6203/application_imputed_dummy_vars.csv")
 ```
 
-### Q3.1 Using the same data set as in Question 2.2, use the ksvm or kknn function to find a good classifier: (a)	using cross-validation (do this for the k-nearest-neighbors model; SVM is optional)
+#### I'll be doing K-folds cross validation to find a good classifier for KNN model
 
-I'll be doing K-folds cross validation to find a good classifier for KNN model
+1.  creating the training/validation and testing data sets and set the final_test_data aside to the test the model picked by K-fold CV.
 
-1. creating the training/validation and testing datasets and set the final_test_data aside to the test the model picked by K-fold CV.
 ```{r}
 #let's set a seed for reproducability
-set.seed(1234) #random number
+set.seed(5678) #random number
 #first, separate the dataset into 80/20 (80% training and validation for cross validation and 20% for test)
-n_dp <- nrow(cc_data)
+n_dp <- nrow(data)
 split_value <- 0.80
 #we are randomly shuffling the entire dataset and then splitting it up according the the split_value we set above.
 training__valid_data_points <- sample(x=1:n_dp,size = as.integer(split_value*n_dp),replace = FALSE)
 #and then subsetting the data as such
-train_valid_data <- cc_data[training__valid_data_points,]
-final_test_data <- cc_data[-training__valid_data_points,]
+train_valid_data <- data[training__valid_data_points,]
+final_test_data <- data[-training__valid_data_points,]
+
+#need to scale data (standardize and normalize)
 ```
-2. Set up k-folds cross validation. In lecture, professor mentioned k=10 is a good value to use. It’s not necessarily always the most optimal but smaller values of k (e.g <5) can lead to higher variance in performance estimate because the evaluation is based on fewer data points which larger k’s (>20) can lead to higher bias in the estimate because each fold contains a smaller portion of the data.
+
+2.  Set up k-folds cross validation. In 6501, professor Sokol mentioned k=10 is a good value to use. It's not necessarily always the most optimal but smaller values of k (e.g \<5) can lead to higher variance in performance estimate because the evaluation is based on fewer data points which larger k's (\>20) can lead to higher bias in the estimate because each fold contains a smaller portion of the data.
 
 First, I define the function for running knn and obtaining the accuracy.
+
 ```{r, knn,message=FALSE}
 # define the function for running KNN and returning the accuracy value
 knn_accuracy <- function(training_data, testing_data, k, kernel){
-formula <- as.factor(R1) ~ A1 + A2 + A3 + A8 + A9 + A10 + A11 + A12 + A14 + A15
+formula <- as.factor(TARGET) ~ `CNT_CHILDREN` + `AMT_INCOME_TOTAL` + `AMT_CREDIT` + `AMT_ANNUITY` + `AMT_GOODS_PRICE` + `DAYS_BIRTH` + `DAYS_EMPLOYED` + `EXT_SOURCE_1` + `EXT_SOURCE_2` + `OBS_30_CNT_SOCIAL_CIRCLE` + `DEF_30_CNT_SOCIAL_CIRCLE` + `OBS_60_CNT_SOCIAL_CIRCLE` + `DEF_60_CNT_SOCIAL_CIRCLE` + `DAYS_LAST_PHONE_CHANGE` + `AMT_REQ_CREDIT_BUREAU_YEAR` + `HAS_CHILDREN` + `AGE_IN_YEARS` + `EMPLOYED_IN_YEARS` + `HAS_CHILDREN_NUM` + `AGE_IN_YEARS_NUM` + `CODE_GENDERF` + `CODE_GENDERM` + `NAME_CONTRACT_TYPECash loans` + `NAME_CONTRACT_TYPERevolving loans` + `FLAG_OWN_CARN` + `FLAG_OWN_CARY` + `NAME_EDUCATION_TYPEAcademic degree` + `NAME_EDUCATION_TYPEHigher education` + `NAME_EDUCATION_TYPEIncomplete higher` + `NAME_EDUCATION_TYPELower secondary` + `NAME_EDUCATION_TYPESecondary / secondary special` + `NAME_FAMILY_STATUSCivil marriage` + `NAME_FAMILY_STATUSMarried` + `NAME_FAMILY_STATUSSeparated` + `NAME_FAMILY_STATUSSingle / not married` + `NAME_FAMILY_STATUSUnknown` + `NAME_FAMILY_STATUSWidow` + `OCCUPATION_TYPEAccountants` + `OCCUPATION_TYPECleaning staff` + `OCCUPATION_TYPECooking staff` + `OCCUPATION_TYPECore staff` + `OCCUPATION_TYPEDrivers` + `OCCUPATION_TYPEHigh skill tech staff` + `OCCUPATION_TYPEHR staff` + `OCCUPATION_TYPEIT staff` + `OCCUPATION_TYPELaborers` + `OCCUPATION_TYPELow-skill Laborers` + `OCCUPATION_TYPEManagers` + `OCCUPATION_TYPEMedicine staff` + `OCCUPATION_TYPEPrivate service staff` + `OCCUPATION_TYPERealty agents` + `OCCUPATION_TYPESales staff` + `OCCUPATION_TYPESecretaries` + `OCCUPATION_TYPESecurity staff` + `OCCUPATION_TYPEWaiters/barmen staff` + `OCCUPATION_TYPEUnknown` + `EDUCATION_LEVELcollege_graduate` + `EDUCATION_LEVELhighschool_graduate` + `EDUCATION_LEVELhighschool_incomplete` + `AGE_BUCKET18-25` + `AGE_BUCKET26-45` + `AGE_BUCKET46-64` + `AGE_BUCKET65+` + `INCOME_BRACKET0-50k` + `INCOME_BRACKET100k-150k` + `INCOME_BRACKET150k-200k` + `INCOME_BRACKET200k-250k` + `INCOME_BRACKET250k-300k` + `INCOME_BRACKET300k+` + `INCOME_BRACKET50k-100k`
     #running the model/prediction using the predefined inputs
     kknn_model <- kknn(formula = formula, training_data, testing_data,
                          k = k, kernel = kernel, scale=TRUE)
@@ -61,18 +96,21 @@ formula <- as.factor(R1) ~ A1 + A2 + A3 + A8 + A9 + A10 + A11 + A12 + A14 + A15
 }
 ```
 
-Then I define the k-folds function. This returns a table that contains each k nearest neighbor hyperparameter, the k-folds validation, and accuracy per portion of k-folds validation. This table is then averaged on the accuracy across k-folds evaluations. Then, we can see what the average accuracy of each model is to determine which knn k value is best to use. I will be using k-folds=10 as stated above and testing knn models using k nearest neighbor values from 1-20. 
+Then I define the k-folds function. This returns a table that contains each k nearest neighbor hyperparameter, the k-folds validation, and accuracy per portion of k-folds validation. This table is then averaged on the accuracy across k-folds evaluations. Then, we can see what the average accuracy of each model is to determine which knn k value is best to use. I will be using k-folds=10 as stated above and testing knn models using k nearest neighbor values from 200-600, incrementing by 20.
+
 ```{r}
 kfolds_CV <- function(k_folds,train_valid_data,k_neighbors, kernel){
   #create a df to store the results
   results <- data.frame()
   #shuffling the dataset
-  set.seed(1234) #random number
+  set.seed(5678) #random number
   train_valid_data<-train_valid_data[sample(nrow(train_valid_data)),]
   #segmenting my training/validating data into k folds.
   folds <- cut(seq(1,nrow(train_valid_data)),breaks=k_folds,labels=FALSE)
+ 
   #determine the loop for how many k_neighbors I want to try
-  for(kn in 1:k_neighbors){
+  k_neighbors <- seq(200, 600, by = 20)
+  for(kn in k_neighbors){
       #Perform k fold cross validation
      for(kf in 1:k_folds){
       #Segment data by fold using the which() function 
@@ -97,6 +135,7 @@ kfolds_CV <- function(k_folds,train_valid_data,k_neighbors, kernel){
 ```
 
 run the kfolds CV function above with parameters: k-folds=10, on the training/validating data set (80% of whole dataset), and using k of 1-20 for knn model with the kernel 'optimal'.
+
 ```{r, fig.height=4,fig.width=6}
 model <- kfolds_CV(k_folds = 10,
                   train_valid_data = train_valid_data,
@@ -129,7 +168,8 @@ ggplot(result, aes(x = k_neighbor, y = mean_accuracy, color = k_neighbor, label 
 
 So according to the "result_grouped" table, we can see that the k values for kknn that performed the best via 10-folds cross validation were `r best_k_neighbors` with a mean accuracy across 10-folds of `r best_mean_accuracy`. We will pick this model. Moving on to the final portion of the cross validation phase, evaluating this model on the testing data we portioned out at the beginning.
 
-3. Train chosen model on all of train_valid_data and evaluate on test_data. Then report the accuracy as it is performance on test_data.
+3.  Train chosen model on all of train_valid_data and evaluate on test_data. Then report the accuracy as it is performance on test_data.
+
 ```{r}
 cv_test_accuracy <- knn_accuracy(training_data = train_valid_data,
                                  testing_data = final_test_data,
@@ -141,17 +181,19 @@ best_mean_accuracy
 accuracy_diff <- abs(best_mean_accuracy - cv_test_accuracy)
 accuracy_diff
 ```
+
 It was expected that the true model accuracy `r cv_test_accuracy` is lower than the training accuracy `r best_mean_accuracy`...however it's still rather close being `r accuracy_diff` off from the training accuracy. I'm satisfied with choosing k value of `r best_k_neighbor` for this classifier.
 
+### (b) splitting the data into training, validation, and test data sets (pick either KNN or SVM; the other is optional).
 
-### (b)	splitting the data into training, validation, and test data sets (pick either KNN or SVM; the other is optional).
-1. creating the training,validation,and testing datasets. I want the majority of the data for training so I’ll do 60% for training, 20% for validation, and 20% for test. First I split it up into 60/40. Then I split that last 40 in half for validation and test.
+1.  creating the training,validation,and testing datasets. I want the majority of the data for training so I'll do 60% for training, 20% for validation, and 20% for test. First I split it up into 60/40. Then I split that last 40 in half for validation and test.
+
 ```{r, regular validation, message=FALSE}
 #let's set a seed for reproducability
 set.seed(1234) #random number
 
 #first, separate the dataset into 60/20/20 (60% training, 20% validation, and 20% for test)
-n_dp <- nrow(cc_data)
+n_dp <- nrow(app_data)
 training_split_value <- 0.60
 
 #we are randomly shuffling the entire dataset and then splitting it up according the the training_split_value we set above.
@@ -160,8 +202,8 @@ training_data_points <- sample(x=1:n_dp,
                                replace = FALSE)
 
 #and then subsetting the data as such
-regular_train_data <- cc_data[training_data_points,]
-fourty_perc_of_data <- cc_data[-training_data_points,]
+regular_train_data <- app_data[training_data_points,]
+fourty_perc_of_data <- app_data[-training_data_points,]
 
 #and then divide the rest of the data evenly between validation and test
 n_rest_of_data <- nrow(fourty_perc_of_data)
@@ -175,7 +217,8 @@ regular_valid_data <- fourty_perc_of_data[valid_data_points,]
 regular_test_data <- fourty_perc_of_data[-valid_data_points,]
 ```
 
-2. train all models on regular_train_data and validate all models on regular_valid_data and pick the best model
+2.  train all models on regular_train_data and validate all models on regular_valid_data and pick the best model
+
 ```{r, knn regular validation,message=FALSE, fig.height=4,fig.width=6}
 #define function to run regular cross validation
 regular_v <- function(train_data,validation_data,k_neighbors, kernel){
@@ -224,8 +267,8 @@ ggplot(result, aes(x = k_neighbor, y = accuracy, color = k_neighbor, label = k_n
 
 According to the result_grouped table, k nearest neighbors values of `r best_k_neighbors` gave the most accurate results via regular validation with an accuracy of `r best_accuracy`
 
-Testing the model we picked on the testing data we portioned out at the beginning.
-3. report the picked model's accuracy as its performance on regular_test_data
+Testing the model we picked on the testing data we portioned out at the beginning. 3. report the picked model's accuracy as its performance on regular_test_data
+
 ```{r, knn regular test,message=FALSE}
 regular_test_accuracy <- knn_accuracy(training_data = regular_train_data,
                                  testing_data = regular_test_data,
@@ -237,4 +280,5 @@ best_accuracy
 accuracy_diff <- abs(best_accuracy - regular_test_accuracy )
 accuracy_diff
 ```
+
 It was expected that the true model accuracy `r regular_test_accuracy` is lower than the training accuracy `r best_mean_accuracy`. It's of interest to note that the k-folds cross validation's validation accuracy is closer to it's test accuracy than the regular validation's validation accuracy to its test accuracy. K-fold cross validation generally provides a more robust estimate of model performance because it averages results over multiple train-test splits, 10 in this case. And it utilizes the data efficiently by using each data point for both training and testing at some point. However, this is more useful for smaller datasets like ours because it can be computationally expensive.
