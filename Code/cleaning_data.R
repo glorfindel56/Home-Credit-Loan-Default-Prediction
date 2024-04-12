@@ -245,7 +245,9 @@ ext_source_2_a <- combined_2(application, "ext_source_2_a") # looks different be
 ext_source_3_a <- combined_2(application, "ext_source_3_a") # does not look different between the two 
 credit <- combined_2(application, "amt_credit_a")
 age <- combined_2(application, "days_birth_in_years_a") # surprisingly no difference
-years_employed <- combined_2(application, "days_employed_in_years_a")
+apartments_avg <- combined_2(application, "apartments_avg_a") # not much difference
+years_build_avg <- combined_2(application, "years_build_avg_a") # clients that live in homes constructed more 
+# recently have a higher default rate?
 
 
 
@@ -256,8 +258,7 @@ cols_not_in_vector <- colnames(application)[!(colnames(application) %in% cat_var
 [10] "amt_annuity_a"                  "amt_goods_price_a"                          
 [16] "name_housing_type_a"            "region_population_relative_a"                    
 [19] "days_employed_a"                "days_registration_a"            "days_id_publish_a"             
-[22] "own_car_age_a"                  "flag_mobil_a"                   "ext_source_1_a"                
-[25] "ext_source_2_a"                 "ext_source_3_a"                 "apartments_avg_a"              
+[22] "own_car_age_a"                  "apartments_avg_a"              
 [28] "basementarea_avg_a"             "years_beginexpluatation_avg_a"  "years_build_avg_a"             
 [31] "commonarea_avg_a"               "elevators_avg_a"                "entrances_avg_a"               
 [34] "floorsmax_avg_a"                "floorsmin_avg_a"                "landarea_avg_a"                
@@ -288,7 +289,4 @@ application <- application %>%
 ######### creating new variables from existing variables #########
 
 home_credit <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/combined_data.csv")
-
-
-
 
