@@ -24,14 +24,49 @@ library(factoextra)
 importing data
 
 ```{r importing data,results='hide',message=FALSE,cache=TRUE}
-data <-read_csv(file = "/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/application_imputed_cleaner_v3.csv", col_names = TRUE)
+data <-read_csv(file = "/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/application_imputed.csv", col_names = TRUE)
 
 colnames(data) <- str_to_lower(colnames(data))
+
+# removing certain columns
+data <- data %>%
+  select(-c(has_children, married, has_children_num, education_level_num, 
+            age_in_years_num, married_num, code_gender_num, income_bracket_num))
+
+# adding feature engineering columns 
+# changing any NAs to a different name for modeling
+data <- data %>%
+  mutate(occupation_type_adj = replace_na(occupation_type, "Unknown"),
+         credit_to_income_ratio = amt_credit / amt_income_total,
+         credit_to_annuity_ratio = amt_credit / amt_annuity,
+         credit_to_goods_price_ratio = amt_credit / amt_goods_price)
+
+# setting up the data to be used for modeling
+# setting the categorical variables as factors
+# making sure the factor levels are valid R variable names
+# removing any "repetitive" data
+data <- data %>%
+  mutate(target = as.factor(target),
+         name_contract_type = as.factor(name_contract_type),
+         code_gender = as.factor(code_gender),
+         flag_own_car = as.factor(flag_own_car),
+         name_education_type = as.factor(name_education_type),
+         name_family_status = as.factor(name_family_status),
+         occupation_type_adj = as.factor(occupation_type_adj),
+         education_level = as.factor(education_level)) %>%
+  mutate(target = fct_recode(target, "No" = "0", "Yes" = "1")) %>%
+  select(-c(days_birth, # keeping year version instead
+            days_employed, # keeping year version instead
+            occupation_type # accounted for NAs in occupation_type_adj
+            ))
+
+# checking data type
+str(data)
 ```
 
 #### I'll be doing K-folds cross validation to find a good classifier for SVM model
 
-1.  creating the training/validation and testing data sets and set the final_test_data aside to test the model picked by K-fold CV.
+1. Creating the training/validation and testing data sets and set the final_test_data aside to test the model picked by K-fold CV.
 
 ```{r}
 #let's set a seed for reproducibility
@@ -41,13 +76,13 @@ set.seed(5678) #random number
 # possible future enhancement is to try oversampling
 # first, separate dataset based on target = 0 and target = 1
 data_0 <- data %>% 
-  filter(target == 0)
+  filter(target == "No")
 data_1 <- data %>%
-  filter(target == 1)
+  filter(target == "Yes")
 
 # separate the dataset into 80/20 (80% training and validation for cross validation and 20% for test)
-n_1 <- sum(data$target == 1)
-n_0 <- sum(data$target == 0)
+n_0 <- sum(data$target == "No")
+n_1 <- sum(data$target == "Yes")
 split_value <- 0.80
 
 #we are randomly shuffling the entire dataset and then splitting it up according the the split_value we set above.
@@ -61,44 +96,74 @@ training_valid_data_points_1 <- sample(x = 1:n_1, size = as.integer(split_value*
 train_valid_data_0 <- data_0[training_valid_data_points_0, ]
 train_valid_data_1 <- data_1[training_valid_data_points_1, ]
 # merging the separate train/validation datasets into one
-train_valid_data <- bind_rows(train_valid_data_0, train_valid_data_1) %>% 
-  select(-c(...1, sk_id_curr))
+train_valid_data <- bind_rows(train_valid_data_0, train_valid_data_1)
 
 # final dataset that will be used to analyze how well the best model (from k-fold cross-validation) performs
 final_test_data_0 <- data_0[-training_valid_data_points_0, ]
 final_test_data_1 <- data_1[-training_valid_data_points_1, ]
 # merging the separate test datasets into one
-final_test_data <- bind_rows(final_test_data_0, final_test_data_1) %>% 
-  select(-c(...1, sk_id_curr))
+final_test_data <- bind_rows(final_test_data_0, final_test_data_1)
 
 #need to scale data (standardize and normalize)
+
+# remove unneeded datasets to clear up memory space
+rm(data_0)
+rm(data_1)
+rm(train_valid_data_0)
+rm(train_valid_data_1)
+rm(final_test_data_0)
+rm(final_test_data_1)
 ```
 
-2.  Set up k-folds cross validation. In 6501, Professor Sokol mentioned k=10 is a good value to use. It's not necessarily always the most optimal but smaller values of k (e.g \<5) can lead to higher variance in performance estimate because the evaluation is based on fewer data points which larger k's (\>20) can lead to higher bias in the estimate because each fold contains a smaller portion of the data.
+2. Set up k-folds cross validation. In 6501, Professor Sokol mentioned k=10 is a good value to use. It's not necessarily always the most optimal but smaller values of k (e.g \<5) can lead to higher variance in performance estimate because the evaluation is based on fewer data points which larger k's (\>20) can lead to higher bias in the estimate because each fold contains a smaller portion of the data.
 
 First, I define the function for running svm and obtaining the accuracy.
 
 ```{r, svm, message=FALSE}
+library(pROC)
+
+# setting seed for reproducibility
 set.seed(5678)
 
 # define the function for running SVM
-svm_model <- function(method_input, metric_input) {
+svm_model <- function(formula, method_input, metric_input) {
+# Define custom summary function for ROC
 # Define your k-fold cross-validation control
-control <- trainControl(method = "cv", number = 10, classProbs = TRUE)
+control <- trainControl(method = "cv", number = 2, classProbs = TRUE)
 # metric <- "Accuracy"
-model <- train(as.factor(target) ~ ., data = train_valid_data, method = method_input, 
-                tuneLength = 8, preProcess = c("center", "scale"),  
-                   metric = metric_input, trControl = control)
+model <- train(formula, data = train_valid_data, method = method_input, 
+                tuneLength = 5, preProcess = c("center", "scale"),  
+                metric = metric_input, trControl = control)
 }
 
 # Support Vector Machines with Radial Basis Function Kernel
-# tuning sigma (sigma) and c (cost
+# tuning sigma (sigma) and c (cost)
 # Sigma in support vector machines helps decide how closely the lines are drawn to the dots.
 # If you choose it just right, you can separate the dots into groups really well!)
 # Think back to visual graphs that Dr. Sokol used to teach us SVM in ISYE 6501!
-svm_1 <- svm_model(method_input = "svmRadial", metric_input = "Accuracy")
+svm_1 <- svm_model(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + amt_income_total +
+  amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+  ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+  education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "svmRadial", metric_input = "Accuracy")
 
-# have to re-clean dataset...
+summary_func <- function(data, lev = NULL, model = NULL) {
+  auc_result <- roc(predict(model, data), as.numeric(data$Class))
+  auc_value <- auc(auc_result)
+  out <- c(auc = auc_value)
+  names(out) <- "AUC"
+  out
+}
+
+# variables that i want to test separately and then together based on how similar they are to each other
+# name_education_type, education_level
+# age_in_years, age_bucket
+# amt_income_total, income_bracket
+# obs_30_cnt_social_circle, obs_60
+
+
 
 
 ```
