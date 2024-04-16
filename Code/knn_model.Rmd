@@ -24,38 +24,19 @@ library(factoextra)
 importing data and creating dummy variables for categorical values
 
 ```{r importing data,results='hide',message=FALSE,cache=TRUE}
-app_data <-read_csv(file = "/Users/kfung/Library/CloudStorage/Box-Box/MGT 6203/application_imputed.csv",col_names = TRUE)
+app_data <-read_csv(file = "/Users/kfung/Library/CloudStorage/Box-Box/MGT 6203/application_imputed_cleaner_v3.csv",col_names = TRUE)
 
-#remove ...1 and other cols from data
-#removing CODE_GENDER_NUM etc bc will create indicator variable below, MARRIED IS NOT USEFUL
-data <- subset(app_data,select=-c(CODE_GENDER_NUM,AGE_IN_YEARS_NUM,HAS_CHILDREN_NUM,MARRIED,MARRIED_NUM,INCOME_BRACKET_NUM,EDUCATION_LEVEL_NUM))
+data <- subset(app_data,select=-c(`...1`,DAYS_BIRTH,DAYS_EMPLOYED,AGE_IN_YEARS_NUM,HAS_CHILDREN_NUM))
 
-#impute OCCUPATION_TYPE
-# Convert OCCUPATION_TYPE to factor
-data$OCCUPATION_TYPE <- as.factor(data$OCCUPATION_TYPE)
+data$TARGET <- factor(data$TARGET, levels = c(0, 1))
 
-# Add "Unknown" as a level to the factor
-data$OCCUPATION_TYPE <- factor(data$OCCUPATION_TYPE, levels = c(levels(data$OCCUPATION_TYPE), "Unknown"))
-# Replace NAs with "Unknown"
-data$OCCUPATION_TYPE[is.na(data$OCCUPATION_TYPE)] <- "Unknown"
-#can check imputation, there are 96389 unknowns
-#table(data$OCCUPATION_TYPE)
+#scale the continous data!!!!
+# columns_to_scale <- c('CREDIT_TO_INCOME_RATIO', 'CREDIT_TO_ANNUITY_RATIO', 'CREDIT_TO_GOODS_PRICE_RATIO','AMT_INCOME_TOTAL' ,'AMT_CREDIT' ,'AMT_ANNUITY' ,'AMT_GOODS_PRICE' ,'EXT_SOURCE_1' ,'EXT_SOURCE_2' ,'OBS_30_CNT_SOCIAL_CIRCLE' ,'DEF_30_CNT_SOCIAL_CIRCLE' ,'OBS_60_CNT_SOCIAL_CIRCLE' ,'DEF_60_CNT_SOCIAL_CIRCLE' ,'DAYS_LAST_PHONE_CHANGE' ,'AMT_REQ_CREDIT_BUREAU_YEAR' ,'AGE_IN_YEARS' ,'EMPLOYED_IN_YEARS')
+# scaled_numeric_data <- scale(data[, columns_to_scale])
+# # Replace the scaled columns in the original data frame
+# data[, columns_to_scale] <- scaled_numeric_data
 
-cat_vars <-c("CODE_GENDER","NAME_CONTRACT_TYPE","FLAG_OWN_CAR","NAME_EDUCATION_TYPE","NAME_FAMILY_STATUS","OCCUPATION_TYPE","EDUCATION_LEVEL","AGE_BUCKET","INCOME_BRACKET")
-# Loop over each categorical variable and create dummy variables
-for (var in cat_vars) {
-  print(paste("cur var:", var))
-  # Create dummy variables using model.matrix
-  dummy_variables <- model.matrix(~ . - 1, data = data[, var, drop = FALSE])
-  
-  # Bind the dummy variables to the original data frame
-  data <- cbind(data, dummy_variables)
-}
-
-# Remove the original categorical variables
-data <- data[, !names(data) %in% cat_vars, drop = FALSE]
-
-#write.csv(data,file = "/Users/kfung/Library/CloudStorage/Box-Box/MGT 6203/application_imputed_dummy_vars.csv")
+#write.csv(data,file = "/Users/kfung/Library/CloudStorage/Box-Box/MGT 6203/application_imputed_dummy_vars_scaledContinuous.csv")
 ```
 
 #### I'll be doing K-folds cross validation to find a good classifier for KNN model
@@ -63,43 +44,179 @@ data <- data[, !names(data) %in% cat_vars, drop = FALSE]
 1.  creating the training/validation and testing data sets and set the final_test_data aside to the test the model picked by K-fold CV.
 
 ```{r}
-#let's set a seed for reproducability
-set.seed(5678) #random number
-#first, separate the dataset into 80/20 (80% training and validation for cross validation and 20% for test)
-n_dp <- nrow(data)
+#let's set a seed for reproducibility
+# joyce code comment (from line 40 onwards)
+# possible future enhancement is to try oversampling
+# first, separate dataset based on target = 0 and target = 1
+data_0 <- data %>% 
+  filter(TARGET == 0)
+data_1 <- data %>%
+  filter(TARGET == 1)
+# separate the dataset into 80/20 (80% training and validation for cross validation and 20% for test)
+n_0 <- sum(data$TARGET == 0)
+n_1 <- sum(data$TARGET == 1)
 split_value <- 0.80
 #we are randomly shuffling the entire dataset and then splitting it up according the the split_value we set above.
-training__valid_data_points <- sample(x=1:n_dp,size = as.integer(split_value*n_dp),replace = FALSE)
-#and then subsetting the data as such
-train_valid_data <- data[training__valid_data_points,]
-final_test_data <- data[-training__valid_data_points,]
-
+training_valid_data_points_0 <- sample(x = 1:n_0, size = as.integer(split_value*n_0), replace = FALSE)
+training_valid_data_points_1 <- sample(x = 1:n_1, size = as.integer(split_value*n_1), replace = FALSE)
+# subsetting the data based on target = 0 and target = 1 to get the same distribution for the target variable in 
+# the train/validation/test datasets
+# train/validation dataset that will be used for k-fold cross-validation
+train_valid_data_0 <- data_0[training_valid_data_points_0, ]
+train_valid_data_1 <- data_1[training_valid_data_points_1, ]
+# merging the separate train/validation datasets into one
+train_valid_data <- bind_rows(train_valid_data_0, train_valid_data_1)
+# final dataset that will be used to analyze how well the best model (from k-fold cross-validation) performs
+final_test_data_0 <- data_0[-training_valid_data_points_0, ]
+final_test_data_1 <- data_1[-training_valid_data_points_1, ]
+# merging the separate test datasets into one
+final_test_data <- bind_rows(final_test_data_0, final_test_data_1)
 #need to scale data (standardize and normalize)
+# remove unneeded datasets to clear up memory space
+rm(data_0)
+rm(data_1)
+rm(train_valid_data_0)
+rm(train_valid_data_1)
+rm(final_test_data_0)
+rm(final_test_data_1)
+
+# Perform oversampling using ROSE
+# oversampled_train_valid_data <- ovun.sample(formula, data = train_valid_data, method = "both", 
+#                                 N = nrow(train_valid_data))
+# 
+# oversampled_final_test_data<- ovun.sample(formula, data = final_test_data, method = "both", 
+#                                 N = nrow(final_test_data))
+# 
+# train_valid_data <- oversampled_train_valid_data$data
+# final_test_data <- oversampled_final_test_data$data
 ```
+
+1.b. testing logistic regression
+```{r}
+library(pROC)
+
+#Define training control
+train_control <- trainControl(method = "cv", number = 4)
+logit_model <- train(as.factor(TARGET)~`AMT_INCOME_TOTAL`+`AMT_CREDIT`+`AMT_ANNUITY`+`AMT_GOODS_PRICE`+`EXT_SOURCE_1`+`EXT_SOURCE_2`+`OBS_30_CNT_SOCIAL_CIRCLE`+`DEF_30_CNT_SOCIAL_CIRCLE`+`OBS_60_CNT_SOCIAL_CIRCLE`+`DEF_60_CNT_SOCIAL_CIRCLE`+`DAYS_LAST_PHONE_CHANGE`+`AMT_REQ_CREDIT_BUREAU_YEAR`+`HAS_CHILDREN`+`AGE_IN_YEARS`+`EMPLOYED_IN_YEARS`+`CODE_GENDERF`+`NAME_CONTRACT_TYPERevolving_loans`+`FLAG_OWN_CARY`+`NAME_FAMILY_STATUSCivil_marriage`+`NAME_FAMILY_STATUSMarried`+`NAME_FAMILY_STATUSSeparated`+`NAME_FAMILY_STATUSSingle_not_married`+`NAME_FAMILY_STATUSWidow`+`OCCUPATION_TYPEAccountants`+`OCCUPATION_TYPECleaning_staff`+`OCCUPATION_TYPECooking_staff`+`OCCUPATION_TYPECore_staff`+`OCCUPATION_TYPEDrivers`+`OCCUPATION_TYPEHigh_skill_tech_staff`+`OCCUPATION_TYPEHR_staff`+`OCCUPATION_TYPEIT_staff`+`OCCUPATION_TYPELaborers`+`OCCUPATION_TYPELow_skill_Laborers`+`OCCUPATION_TYPEManagers`+`OCCUPATION_TYPEMedicine_staff`+`OCCUPATION_TYPEPrivate_service_staff`+`OCCUPATION_TYPERealty_agents`+`OCCUPATION_TYPESales_staff`+`OCCUPATION_TYPESecretaries`+`OCCUPATION_TYPESecurity_staff`+`OCCUPATION_TYPEWaiters_barmen_staff`+`EDUCATION_LEVELcollege_graduate`+`EDUCATION_LEVELhighschool_graduate`+`INCOME_BRACKET100k_150k`+`INCOME_BRACKET150k_200k`+`INCOME_BRACKET200k_250k`+`INCOME_BRACKET250k_300k`+`INCOME_BRACKET300k_UP`+`INCOME_BRACKET50k_100k` + `CREDIT_TO_INCOME_RATIO` + `CREDIT_TO_ANNUITY_RATIO` + `CREDIT_TO_GOODS_PRICE_RATIO`, data = data, trControl = train_control, method = "glm", family = "binomial")
+test_probabilities <- predict(logit_model, newdata = final_test_data)
+# Convert your predictor to numeric
+test_probabilities <- as.numeric(test_probabilities)
+#Step 3: Compute ROC Curve and AUC
+roc_curve <- roc(final_test_data$TARGET, test_probabilities)
+auc_value <- auc(roc_curve)
+cat("auc_value:", auc_value)
+# Plot ROC Curve
+plot(roc_curve, main = "ROC Curve")
+abline(a = 0, b = 1, lty = 2, col = "gray")
+legend("bottomright", legend = paste("AUC =", round(auc_value, 2)), col = "black", lty = 1, cex = 0.8)
+
+
+#no cross validation
+no_cv_logit_model <- glm(formula,data = data)
+no_cv_test_probabilities <- predict(no_cv_logit_model, newdata = final_test_data,type="response")
+# Step 3: Compute ROC Curve and AUC
+roc_curve <- roc(final_test_data$TARGET, no_cv_test_probabilities)
+auc_value <- auc(roc_curve)
+cat("no cv auc_value:", auc_value)
+# Plot ROC Curve
+plot(roc_curve, main = "ROC Curve")
+abline(a = 0, b = 1, lty = 2, col = "gray")
+legend("bottomright", legend = paste("AUC =", round(auc_value, 2)), col = "black", lty = 1, cex = 0.8)
+
+# Step 4: Test on Test Data
+# Threshold selection (optional): You may choose a threshold to convert probabilities to class labels
+predicted_labels <- as.factor(ifelse(test_probabilities >= 0.2, 1, 0))
+
+# Evaluate performance metrics (e.g., accuracy, precision, recall)
+conf_matrix <- confusionMatrix(predicted_labels, final_test_data$TARGET)
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+precision <- conf_matrix[2, 2] / sum(conf_matrix[, 2])
+recall <- conf_matrix[2, 2] / sum(conf_matrix[2, ])
+
+# Print performance metrics
+cat("Accuracy:", accuracy, "\n")
+cat("Precision:", precision, "\n")
+cat("Recall:", recall, "\n")
+```
+
 
 2.  Set up k-folds cross validation. In 6501, professor Sokol mentioned k=10 is a good value to use. It's not necessarily always the most optimal but smaller values of k (e.g \<5) can lead to higher variance in performance estimate because the evaluation is based on fewer data points which larger k's (\>20) can lead to higher bias in the estimate because each fold contains a smaller portion of the data.
 
 First, I define the function for running knn and obtaining the accuracy.
 
+```{r}
+train_control <- trainControl(method = "cv", number = 4, classProbs = TRUE, 
+                              summaryFunction = defaultSummary)
+
+# Train the model with different values of k
+grid <- expand.grid(kmax = seq(from = 2, to = 20, by = 1),
+                    distance = 1,
+                    kernel = "optimal")
+knn_model <- train(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + amt_income_total +
+  amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+  ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+  education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, data = train_valid_data, method = "kknn", tuneGrid = grid,
+               trControl = train_control, metric = "Accuracy")
+
+# Print the best model
+print(knn_model)
+
+# Make predictions on the test set
+predictions <- predict(knn_model, newdata = testing_data)
+
+# Calculate the ROC curve
+roc_obj <- roc(test.data$class, as.numeric(predictions))
+```
+
 ```{r, knn,message=FALSE}
 # define the function for running KNN and returning the accuracy value
 knn_accuracy <- function(training_data, testing_data, k, kernel){
-formula <- as.factor(TARGET) ~ `CNT_CHILDREN` + `AMT_INCOME_TOTAL` + `AMT_CREDIT` + `AMT_ANNUITY` + `AMT_GOODS_PRICE` + `DAYS_BIRTH` + `DAYS_EMPLOYED` + `EXT_SOURCE_1` + `EXT_SOURCE_2` + `OBS_30_CNT_SOCIAL_CIRCLE` + `DEF_30_CNT_SOCIAL_CIRCLE` + `OBS_60_CNT_SOCIAL_CIRCLE` + `DEF_60_CNT_SOCIAL_CIRCLE` + `DAYS_LAST_PHONE_CHANGE` + `AMT_REQ_CREDIT_BUREAU_YEAR` + `HAS_CHILDREN` + `AGE_IN_YEARS` + `EMPLOYED_IN_YEARS` + `HAS_CHILDREN_NUM` + `AGE_IN_YEARS_NUM` + `CODE_GENDERF` + `CODE_GENDERM` + `NAME_CONTRACT_TYPECash loans` + `NAME_CONTRACT_TYPERevolving loans` + `FLAG_OWN_CARN` + `FLAG_OWN_CARY` + `NAME_EDUCATION_TYPEAcademic degree` + `NAME_EDUCATION_TYPEHigher education` + `NAME_EDUCATION_TYPEIncomplete higher` + `NAME_EDUCATION_TYPELower secondary` + `NAME_EDUCATION_TYPESecondary / secondary special` + `NAME_FAMILY_STATUSCivil marriage` + `NAME_FAMILY_STATUSMarried` + `NAME_FAMILY_STATUSSeparated` + `NAME_FAMILY_STATUSSingle / not married` + `NAME_FAMILY_STATUSUnknown` + `NAME_FAMILY_STATUSWidow` + `OCCUPATION_TYPEAccountants` + `OCCUPATION_TYPECleaning staff` + `OCCUPATION_TYPECooking staff` + `OCCUPATION_TYPECore staff` + `OCCUPATION_TYPEDrivers` + `OCCUPATION_TYPEHigh skill tech staff` + `OCCUPATION_TYPEHR staff` + `OCCUPATION_TYPEIT staff` + `OCCUPATION_TYPELaborers` + `OCCUPATION_TYPELow-skill Laborers` + `OCCUPATION_TYPEManagers` + `OCCUPATION_TYPEMedicine staff` + `OCCUPATION_TYPEPrivate service staff` + `OCCUPATION_TYPERealty agents` + `OCCUPATION_TYPESales staff` + `OCCUPATION_TYPESecretaries` + `OCCUPATION_TYPESecurity staff` + `OCCUPATION_TYPEWaiters/barmen staff` + `OCCUPATION_TYPEUnknown` + `EDUCATION_LEVELcollege_graduate` + `EDUCATION_LEVELhighschool_graduate` + `EDUCATION_LEVELhighschool_incomplete` + `AGE_BUCKET18-25` + `AGE_BUCKET26-45` + `AGE_BUCKET46-64` + `AGE_BUCKET65+` + `INCOME_BRACKET0-50k` + `INCOME_BRACKET100k-150k` + `INCOME_BRACKET150k-200k` + `INCOME_BRACKET200k-250k` + `INCOME_BRACKET250k-300k` + `INCOME_BRACKET300k+` + `INCOME_BRACKET50k-100k`
+formula <- as.factor(TARGET)~`AMT_INCOME_TOTAL`+`AMT_CREDIT`+`AMT_ANNUITY`+`AMT_GOODS_PRICE`+`EXT_SOURCE_1`+`EXT_SOURCE_2`+`OBS_30_CNT_SOCIAL_CIRCLE`+`DEF_30_CNT_SOCIAL_CIRCLE`+`OBS_60_CNT_SOCIAL_CIRCLE`+`DEF_60_CNT_SOCIAL_CIRCLE`+`DAYS_LAST_PHONE_CHANGE`+`AMT_REQ_CREDIT_BUREAU_YEAR`+`HAS_CHILDREN`+`AGE_IN_YEARS`+`EMPLOYED_IN_YEARS`+`CODE_GENDERF`+`NAME_CONTRACT_TYPERevolving_loans`+`FLAG_OWN_CARY`+`NAME_FAMILY_STATUSCivil_marriage`+`NAME_FAMILY_STATUSMarried`+`NAME_FAMILY_STATUSSeparated`+`NAME_FAMILY_STATUSSingle_not_married`+`NAME_FAMILY_STATUSWidow`+`OCCUPATION_TYPEAccountants`+`OCCUPATION_TYPECleaning_staff`+`OCCUPATION_TYPECooking_staff`+`OCCUPATION_TYPECore_staff`+`OCCUPATION_TYPEDrivers`+`OCCUPATION_TYPEHigh_skill_tech_staff`+`OCCUPATION_TYPEHR_staff`+`OCCUPATION_TYPEIT_staff`+`OCCUPATION_TYPELaborers`+`OCCUPATION_TYPELow_skill_Laborers`+`OCCUPATION_TYPEManagers`+`OCCUPATION_TYPEMedicine_staff`+`OCCUPATION_TYPEPrivate_service_staff`+`OCCUPATION_TYPERealty_agents`+`OCCUPATION_TYPESales_staff`+`OCCUPATION_TYPESecretaries`+`OCCUPATION_TYPESecurity_staff`+`OCCUPATION_TYPEWaiters_barmen_staff`+`EDUCATION_LEVELcollege_graduate`+`EDUCATION_LEVELhighschool_graduate`+`INCOME_BRACKET100k_150k`+`INCOME_BRACKET150k_200k`+`INCOME_BRACKET200k_250k`+`INCOME_BRACKET250k_300k`+`INCOME_BRACKET300k_UP`+`INCOME_BRACKET50k_100k` + `CREDIT_TO_INCOME_RATIO` + `CREDIT_TO_ANNUITY_RATIO` + `CREDIT_TO_GOODS_PRICE_RATIO`
+    print(paste("cur k: ", k))
+    
     #running the model/prediction using the predefined inputs
-    kknn_model <- kknn(formula = formula, training_data, testing_data,
-                         k = k, kernel = kernel, scale=TRUE)
+    kknn_model <- kknn(formula = formula, training_data, testing_data, 
+                       k = k, kernel = kernel)
     #getting the fitted value
     fitted_value <- kknn_model$fitted.values
-    #getting accuracy and returning it
-    accuracy_kknn <- sum(fitted_value == testing_data$R1)/ nrow(testing_data)
-    return(accuracy_kknn)
+    #getting ROC and AUC
+    # Get the predicted probabilities
+    prob <- kknn_model$fitted.values
+    
+    # Calculate the ROC curve
+    roc_obj <- roc(testing_data$TARGET, prob)
+    
+    # Calculate the AUC
+    auc_val <- auc(roc_obj)
+    print(paste("cur k: ", k))
+    cat("auc_value:", auc_value)
+    # Plot ROC Curve
+    plot(roc_curve, main = paste("ROC Curve","k:",k))
+    abline(a = 0, b = 1, lty = 2, col = "gray")
+    legend("bottomright", legend = paste("AUC =", round(auc_value, 2)), col = "black", lty = 1, cex = 0.8)
+
+    #confusionMat
+    # #testing_data$TARGET <- factor(testing_data$TARGET, levels = levels(fitted_value))
+    cm <- confusionMatrix(fitted_value,as.factor(testing_data$TARGET))
+    print(cm)
+    # cm_accuracy <- cm$overall["Accuracy"]
+    # print(paste("Accuracy:", cm_accuracy))
+    return(auc_val)
 }
 ```
 
-Then I define the k-folds function. This returns a table that contains each k nearest neighbor hyperparameter, the k-folds validation, and accuracy per portion of k-folds validation. This table is then averaged on the accuracy across k-folds evaluations. Then, we can see what the average accuracy of each model is to determine which knn k value is best to use. I will be using k-folds=10 as stated above and testing knn models using k nearest neighbor values from 200-600, incrementing by 20.
+Then I define the k-folds function. This returns a table that contains each k nearest neighbor hyperparameter, the k-folds validation, and accuracy per portion of k-folds validation. This table is then averaged on the accuracy across k-folds evaluations. Then, we can see what the average accuracy of each model is to determine which knn k value is best to use. I will be using k-folds=5 as stated above and testing knn models using k nearest neighbor values from 200-600, incrementing by 20.
 
 ```{r}
-kfolds_CV <- function(k_folds,train_valid_data,k_neighbors, kernel){
+#scale the continous data!!!!
+columns_to_scale <- c('CREDIT_TO_INCOME_RATIO', 'CREDIT_TO_ANNUITY_RATIO', 'CREDIT_TO_GOODS_PRICE_RATIO','AMT_INCOME_TOTAL' ,'AMT_CREDIT' ,'AMT_ANNUITY' ,'AMT_GOODS_PRICE' ,'EXT_SOURCE_1' ,'EXT_SOURCE_2' ,'OBS_30_CNT_SOCIAL_CIRCLE' ,'DEF_30_CNT_SOCIAL_CIRCLE' ,'OBS_60_CNT_SOCIAL_CIRCLE' ,'DEF_60_CNT_SOCIAL_CIRCLE' ,'DAYS_LAST_PHONE_CHANGE' ,'AMT_REQ_CREDIT_BUREAU_YEAR' ,'AGE_IN_YEARS' ,'EMPLOYED_IN_YEARS')
+scaled_numeric_data <- scale(data[, columns_to_scale])
+# Replace the scaled columns in the original data frame
+data[, columns_to_scale] <- scaled_numeric_data
+kfolds_CV <- function(k_folds,train_valid_data, kernel){
   #create a df to store the results
   results <- data.frame()
   #shuffling the dataset
@@ -109,23 +226,25 @@ kfolds_CV <- function(k_folds,train_valid_data,k_neighbors, kernel){
   folds <- cut(seq(1,nrow(train_valid_data)),breaks=k_folds,labels=FALSE)
  
   #determine the loop for how many k_neighbors I want to try
-  k_neighbors <- seq(200, 600, by = 20)
+  k_neighbors <- seq(2, 20, by = 2)
   for(kn in k_neighbors){
       #Perform k fold cross validation
      for(kf in 1:k_folds){
+       print(paste("cur fold: ", kf))
       #Segment data by fold using the which() function 
       test_indexes <- which(folds==kf,arr.ind=TRUE)
       #define the test data per the indices defined above
-      test_data <- train_valid_data[test_indexes, ]
+      testing_data <- train_valid_data[test_indexes, ]
       #same for train data
-      train_data <- train_valid_data[-test_indexes, ]
+      training_data <- train_valid_data[-test_indexes, ]
       #run the knn function and get the accuracy value for the above sets
-      knn_res <- knn_accuracy(train_data,test_data,
+      knn_res <- knn_accuracy(training_data,testing_data,
                               k = kn,kernel = "optimal")
       #staging the results to add to final df
       result <- data.frame(current_k_fold=kf, 
                            k_neighbor=kn, 
-                           accuracy=knn_res)
+                           AUC=knn_res)
+      print(paste("res: ", result))
       #add results to final df
       results <- bind_rows(results,result)
      }
@@ -134,12 +253,11 @@ kfolds_CV <- function(k_folds,train_valid_data,k_neighbors, kernel){
 }
 ```
 
-run the kfolds CV function above with parameters: k-folds=10, on the training/validating data set (80% of whole dataset), and using k of 1-20 for knn model with the kernel 'optimal'.
+run the kfolds CV function above with parameters: k-folds=5, on the training/validating data set (80% of whole dataset), and using k of 200-600, increment by 50 for knn model with the kernel 'optimal'.
 
 ```{r, fig.height=4,fig.width=6}
-model <- kfolds_CV(k_folds = 10,
+model <- kfolds_CV(k_folds = 2,
                   train_valid_data = train_valid_data,
-                  k_neighbors = 20,
                   kernel = "optimal")
 
 #take the average of all 10 evaluations per k neighbor value and sort by highest mean accuracy
@@ -171,6 +289,7 @@ So according to the "result_grouped" table, we can see that the k values for kkn
 3.  Train chosen model on all of train_valid_data and evaluate on test_data. Then report the accuracy as it is performance on test_data.
 
 ```{r}
+best_k_neighbor <- 60
 cv_test_accuracy <- knn_accuracy(training_data = train_valid_data,
                                  testing_data = final_test_data,
                                  k = best_k_neighbor,
@@ -221,11 +340,12 @@ regular_test_data <- fourty_perc_of_data[-valid_data_points,]
 
 ```{r, knn regular validation,message=FALSE, fig.height=4,fig.width=6}
 #define function to run regular cross validation
-regular_v <- function(train_data,validation_data,k_neighbors, kernel){
+regular_v <- function(train_data,validation_data,k_neighbors_lower,k_neighbors_upper, kernel){
   #create a df to store the results
   results <- data.frame()
   #determine the loop for how many k_neighbors I want to try
-  for(kn in 1:k_neighbors){
+  k_neighbors <- seq(k_neighbors_lower, k_neighbors_upper, by = 100)
+  for(kn in k_neighbors){
       #run the knn function and get the accuracy value for validation set
       knn_res <- knn_accuracy(train_data,validation_data,
                               k = kn,kernel = kernel)
@@ -239,7 +359,8 @@ regular_v <- function(train_data,validation_data,k_neighbors, kernel){
 #run the regular validation function above with parameters: k-folds=10, on the training/validating data set (80% of whole dataset), and using k of 1-20 for knn model.
 model <- regular_v(train_data = regular_train_data,
                     validation_data = regular_valid_data,
-                    k_neighbors = 20,
+                    k_neighbors_lower =  400,
+                    k_neighbors_upper = 800,
                     kernel = "optimal")
 
 result <- model %>%
