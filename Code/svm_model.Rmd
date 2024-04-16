@@ -126,10 +126,10 @@ library(pROC)
 set.seed(5678)
 
 # define the function for running SVM
-svm_model <- function(formula, method_input, metric_input) {
+model_type <- function(formula, method_input, metric_input) {
 # Define custom summary function for ROC
 # Define your k-fold cross-validation control
-control <- trainControl(method = "cv", number = 2, classProbs = TRUE)
+control <- trainControl(method = "cv", number = 5, classProbs = TRUE)
 # metric <- "Accuracy"
 model <- train(formula, data = train_valid_data, method = method_input, 
                 tuneLength = 5, preProcess = c("center", "scale"),  
@@ -141,13 +141,67 @@ model <- train(formula, data = train_valid_data, method = method_input,
 # Sigma in support vector machines helps decide how closely the lines are drawn to the dots.
 # If you choose it just right, you can separate the dots into groups really well!)
 # Think back to visual graphs that Dr. Sokol used to teach us SVM in ISYE 6501!
-svm_1 <- svm_model(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + amt_income_total +
-  amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
-  ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+# set.seed(5678)
+# svm <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + amt_income_total +
+#   amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+#   credit_to_goods_price_ratio, method_input = "svmRadial", metric_input = "Accuracy")
+
+# GLMNET - Regularized Logistic Regression
+set.seed(5678)
+regularized_logistic_regression <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
-  credit_to_goods_price_ratio, method_input = "svmRadial", metric_input = "Accuracy")
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "Accuracy")
+
+# Logistic Regression
+# set.seed(5678)
+# logistic_regression <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+#   credit_to_goods_price_ratio, method_input = "glm", metric_input = "Accuracy")
+
+# Bagged CART
+# set.seed(5678)
+# cart <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+#   credit_to_goods_price_ratio, method_input = "treebag", metric_input = "Accuracy")
+
+# Random Forest
+# set.seed(5678)
+# random_forest <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+#   credit_to_goods_price_ratio, method_input = "rf", metric_input = "Accuracy")
+
+# GBM - Gradient Boosting Machine
+# set.seed(5678)
+# gbm <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status +
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle +
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket +
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio +
+#   credit_to_goods_price_ratio, method_input = "gbm", metric_input = "Accuracy")
+
+# KNN - K-Nearest Neighbors
+# set.seed(5678)
+# knn <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+#   credit_to_goods_price_ratio, method_input = "knn", metric_input = "Accuracy")
 
 summary_func <- function(data, lev = NULL, model = NULL) {
   auc_result <- roc(predict(model, data), as.numeric(data$Class))
