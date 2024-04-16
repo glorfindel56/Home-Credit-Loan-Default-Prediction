@@ -247,7 +247,67 @@ regularized_logistic_regression_3 <- model_type(target ~ name_contract_type + co
 
 predictions(regularized_logistic_regression_3, 3)
 
+# remove education_level since it returns a lower AUC
 
+# model 4 - only tests out age_in_years
+set.seed(5678)
+regularized_logistic_regression_4 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_in_years + employed_in_years + income_bracket + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+predictions(regularized_logistic_regression_4, 4)
+
+# model 5 - only tests out age_bucket
+set.seed(5678)
+regularized_logistic_regression_5 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_bucket + employed_in_years + income_bracket + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+predictions(regularized_logistic_regression_5, 5)
+
+# remove age_in_years since it returns a lower AUC
+
+# model 6 - only tests out amount_income_total
+set.seed(5678)
+regularized_logistic_regression_6 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_bucket + employed_in_years + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+predictions(regularized_logistic_regression_6, 6)
+
+# model 7 - only tests out income_bracket
+set.seed(5678)
+regularized_logistic_regression_7 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + income_bracket + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_bucket + employed_in_years + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+predictions(regularized_logistic_regression_7, 7)
+
+# remove amt_income_total since it returns a lower AUC
+
+# model 8 - testing out 30_cnt only
+set.seed(5678)
+regularized_logistic_regression_8 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + income_bracket + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_bucket + employed_in_years + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+predictions(regularized_logistic_regression_8, 8)
+
+# model 9 - testing out 60_cnt only
+set.seed(5678)
+regularized_logistic_regression_9 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + income_bracket + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_bucket + employed_in_years + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+predictions(regularized_logistic_regression_9, 9)
+
+# removing obs_60_cnt_social_circle, def_60_cnt_social_circle since it returns a lower AUC
+
+# final logistic regression model is model 8!
 
 # Get the coefficients of the fitted model
 coefficients_1 <- coef(regularized_logistic_regression_1$finalModel, s = regularized_logistic_regression_1$bestTune$lambda)
@@ -257,13 +317,5 @@ coefficients_2 <- coef(regularized_logistic_regression_2$finalModel, s = regular
 # Print coefficients
 print(coefficients_1)
 print(coefficients_2)
-
-# variables that i want to test separately and then together based on how similar they are to each other
-# name_education_type, education_level
-# age_in_years, age_bucket
-# amt_income_total, income_bracket
-# obs_30_cnt_social_circle, obs_60_cnt_social_circle
-# def_30_cnt_social_circle, def_60_cnt_social_circle
-
 ```
 
