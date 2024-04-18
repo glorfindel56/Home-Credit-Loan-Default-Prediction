@@ -119,7 +119,31 @@ df_trimmed <- df %>%
          EDUCATION_LEVEL,AGE_IN_YEARS,AGE_BUCKET,MARRIED,EMPLOYED_IN_YEARS,
          INCOME_BRACKET)
 
-write.csv(df_trimmed,file = "/Users/kfung/Library/CloudStorage/Box-Box/MGT 6203/application_trimmed_kai_30_cols.csv")
+#write.csv(df_trimmed,file = "/Users/kfung/Library/CloudStorage/Box-Box/MGT 6203/application_trimmed_kai_30_cols.csv")
 
+
+########### PLOTTING MISSINGNESS IN TRIMMED DATA ###################
+missing_percent<-colMeans(is.na(df_trimmed))*100 #display % missing in each col
+missing_percent
+#too many variables to plot all missingness on one graph
+#plot variables missingness
+df <- data.frame(
+  Columns = names(missing_percent),
+  Percent_Missingness = missing_percent
+)
+
+# Create ggplot
+ggplot(df, aes(x = Columns, y = Percent_Missingness)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "blue", shape = 19, size = 2) +
+  labs(x = "Predictors", y = "Percent Missingness", title = "Percent Missing in Columns") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1,colour = "black"),
+        plot.title = element_text(hjust = 0.5)) +
+  geom_hline(yintercept = 40, linetype = "dashed", color = "red") +
+  scale_x_discrete(limits = df$Columns)
+#list variables missing over 40%, can also be seen in above graphs
+missing_40percent<-names(missing_percent[missing_percent>=40])
+missing_40percent
 
 

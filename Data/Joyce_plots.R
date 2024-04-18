@@ -77,34 +77,22 @@ application <- application %>%
   mutate(income_bracket = cut(amt_income_total_a, 
                               breaks = breaks, labels = labels, include.lowest = TRUE),
          EMPLOYED_IN_YEARS = ifelse(days_employed_a == 365243, NA,
-                                    round( -days_employed_a / 365.25,2)))
-table(application$occupation_type_a, application$income_bracket)
+                                    round( -days_employed_a / 365.25,2)),
+         AGE_IN_YEARS = floor(-days_birth_a / 365.25),
+         AGE_BUCKET = cut(AGE_IN_YEARS, breaks = c(18, 26, 46, 65, Inf),
+                          labels = c("18-25", "26-45", "46-64", "65+"), right = FALSE),
+         MARRIED = case_when(name_family_status_a %in% c("Civil marriage","Married") ~ 1, 
+                             TRUE ~ 0)
+         )
 
+
+
+table(application$occupation_type_a, application$income_bracket)
 income_bracket <- combined(application, "income_bracket")
 
-
-# creating a list of categorical variables that need to be inspected w exploratory analysis
-cat_var <- c("flag_emp_phone_a", "flag_work_phone_a", "flag_cont_mobile_a", 
-             "flag_phone_a", "flag_email_a", "occupation_type_a",
-             "cnt_fam_members_a", "region_rating_client_a", "region_rating_client_w_city_a",
-             "weekday_appr_process_start_a", "hour_appr_process_start_a", "reg_region_not_live_region_a",
-             "reg_region_not_work_region_a", "live_region_not_work_region_a", "reg_city_not_live_city_a",
-             "reg_city_not_work_city_a", "live_city_not_work_city_a", "organization_type_a",
-             "fondkapremont_mode_a", "housetype_mode_a", "wallsmaterial_mode_a", 
-             "obs_30_cnt_social_circle_a", "def_30_cnt_social_circle_a", "obs_60_cnt_social_circle_a",
-             "def_60_cnt_social_circle_a", "flag_document_2_a", "flag_document_3_a", "flag_document_4_a",
-             "flag_document_5_a", "flag_document_6_a", "flag_document_7_a",
-             "flag_document_8_a", "flag_document_9_a", "flag_document_10_a",            
-             "flag_document_11_a", "flag_document_12_a", "flag_document_13_a",           
-             "flag_document_14_a", "flag_document_15_a", "flag_document_16_a",            
-             "flag_document_17_a", "flag_document_18_a", "flag_document_19_a",           
-             "flag_document_20_a", "flag_document_21_a", "amt_req_credit_bureau_hour_a",  
-             "amt_req_credit_bureau_day_a", "amt_req_credit_bureau_week_a", "amt_req_credit_bureau_mon_a",   
-             "amt_req_credit_bureau_qrt_a", "amt_req_credit_bureau_year_a")
-
-for (i in cat_var) {
-  combined(application, {{i}})
-}
+AGE_BUCKET <- combined(application, "AGE_BUCKET")
+MARRIED <- combined(application, "MARRIED")
+name_family_status <- combined(application, "name_family_status_a")
 
 # results based on looking at the plots created for the categorical variables
 # variables that can be dropped based on high correlation to other variables:
@@ -161,9 +149,8 @@ days_last_phone_change_a <- combined_2(application, "days_last_phone_change_a")
 amt_req_credit_bureau_hour <- combined_2(application, "amt_req_credit_bureau_hour_a")
 amt_req_credit_bureau_day_a <- combined_2(application, "amt_req_credit_bureau_day_a")
 amt_req_credit_bureau_week_a <- combined_2(application, "amt_req_credit_bureau_week_a")
-#amt_req_credit_bureau_qrt_a <- combined_2(application, "amt_req_credit_bureau_qrt_a") #this one looks weird
+#amt_req_credit_bureau_qrt_a <- combined_2(application, "amt_req_credit_bureau_qrt_a") #this one looks weird, needs to be capped
 amt_req_credit_bureau_year_a <- combined_2(application, "amt_req_credit_bureau_year_a")
-
 
 
 
