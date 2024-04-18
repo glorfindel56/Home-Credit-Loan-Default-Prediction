@@ -1,12 +1,12 @@
 ---
 title: "knn model"
 output:
-  html_document: default
   word_document:
     fig_caption: yes
     fig_height: 5
     fig_width: 5
-    reference_docx: hw_template.docx
+    reference_docx: ../Other Resources/report_template.docx
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
