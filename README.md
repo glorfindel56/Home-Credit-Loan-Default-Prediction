@@ -22,7 +22,7 @@ The central problem our team seeks to solve is the development of a reliable pre
 ## Repository Structure
 
 ### `Code`
-Contains all the R and Python scripts used for data cleaning, preprocessing, exploratory data analysis, and modeling.
+Contains all the R scripts used for data cleaning, preprocessing, exploratory data analysis, and modeling.
 
 ### `Data`
 Raw and processed data files. All code results are moved here.
