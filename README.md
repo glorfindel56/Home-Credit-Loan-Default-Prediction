@@ -21,8 +21,12 @@ The central problem our team seeks to solve is the development of a reliable pre
 
 ## Repository Structure
 
+### `requirements.txt`
+Contains all the libraries used for this group project.
+
 ### `Code`
 Contains all the R scripts used for data cleaning, preprocessing, exploratory data analysis, and modeling.
+- `2 Exploratory Data Analysis` and `3 Modeling Methodology` has all the code used to produce the results seen under the same titles in our final report.
 
 ### `Data`
 Raw and processed data files. All code results are moved here.
@@ -36,7 +40,7 @@ Comprehensive report of the findings, methodology, and conclusions of the analys
 Graphical representations and plots generated during the EDA and modeling stages.
 
 ## Google Drive
-- Documents and Resources will be placed in this Google Drive shared folder. Collaborations like the Group Project Proposal will be done over a Google Doc document, when ready will be exported and submitted in Canvas as a .PDF.
+- Documents and Resources will be placed in this Google Drive shared folder. Collaborations like the Group Project Proposal will be done over a Google Doc document, and are exported and submitted in Canvas as a .PDF.
 - [Team 89 - Google Drive](https://drive.google.com/drive/folders/1fgMOmtSIlGcIcjbpQjrJadFLRaADpTf8?usp=sharing)
 
 ## DropBox
@@ -45,7 +49,7 @@ Graphical representations and plots generated during the EDA and modeling stages
 
 ## Branching and Contributions
 - Please checkout the develop branch and work from there. All code will be pushed to the 'develop' branch. Branches can be created off of develop as needed.
-- Official changes made to the project will be merged into 'main' by Pull requests on GitHub.
+- Official changes made to the project will be merged into 'main' by pull requests on GitHub.
 
 ## Usage
 - Refer to `Code/` for data exploration and preprocessing steps.
