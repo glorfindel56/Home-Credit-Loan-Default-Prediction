@@ -1,0 +1,27 @@
+The following libraries were used in Team 89's MGT 6203 group project:
+1. tidyverse
+2. gridExtra
+3. readr
+4. dplyr
+5. ggplot2
+6. corrplot
+7. reshape2
+8. MASS
+9. caret
+10. pROC
+11. kknn
+12. rmarkdown
+13. tidyr
+14. Hmisc
+15. kernlab
+16. psychTools
+17. psych
+18. mice
+19. hot.deck
+20. GGally
+21. factoextra
+22. gbm
+23. cv
+24. randomForest
+25. boost
+26. steprf
