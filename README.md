@@ -7,7 +7,7 @@ Welcome to Team 89's group project GitHub repository for MGT 6203 (Canvas) Sprin
 ## Team Members
 - Kai Fung
 - Joyce Hu
-- Kevlin Mach
+- Kevin Mach
 - Joncarlo Montenegro
 - Calvin TszFung Ng
 
