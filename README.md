@@ -44,7 +44,7 @@ Graphical representations and plots generated during the EDA and modeling stages
 - [Team 89 - Google Drive](https://drive.google.com/drive/folders/1fgMOmtSIlGcIcjbpQjrJadFLRaADpTf8?usp=sharing)
 
 ## DropBox
-- All dataset in csv format are in this DropBox folder. 
+- All datasets in csv format are in this DropBox folder. A data dictionary is also provided as well.
 - [Team 89 - DropBox](https://www.dropbox.com/scl/fo/ni4tapo1yxhq7y609gz75/AJv752H-ia6Y5vg1i4WoKK4?rlkey=jo2dl4tf42a1owwy9y2zpjx9i&e=1&dl=0)
 
 ## Branching and Contributions
