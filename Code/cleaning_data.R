@@ -126,52 +126,47 @@ application <- application %>% rename_with(~ paste0(., "_a"), everything())
 n_distinct(application$sk_id_curr_a)
 
 # count of defaulters vs non-defaulters for categorical variables in a graph and table
-combined <- function(data, variable){
+combined <- function(data, variable, variable_english){
   
   graph <- data %>%
-    mutate(target_a = factor(target_a)) %>%
-    group_by(!!sym(variable), target_a) %>%
+    mutate(target = factor(target, levels = c(0, 1), labels = c("No", "Yes"))) %>%
+    group_by(!!sym(variable), target) %>%
     summarize(n = n(), .groups = "drop") %>% # suppress warning message
     mutate(!!sym(variable) := factor(!!sym(variable))) %>%
-    ggplot(aes(x = !!sym(variable), y = n, fill = target_a)) +
+    ggplot(aes(x = !!sym(variable), y = n, fill = target)) +
     geom_bar(stat = "identity", na.rm = TRUE) +
-    labs(y = "Count", title = "Number of Loans - Repaid vs Defaulted") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    labs(y = "Count", x = variable_english, title = "Number of Loans - Repaid vs Defaulted") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_fill_discrete(name = "Default")
   
   table <- data %>%
-    group_by(!!sym(variable), target_a) %>%
+    group_by(!!sym(variable), target) %>%
     summarize(n = n(), .groups = "drop") %>%
-    pivot_wider(., names_from = target_a, values_from = n) %>%
-    mutate(default_rate = round(.[ , c(3)] / rowSums(.[ , c(2, 3)]), 2))
-  
+    pivot_wider(., names_from = target, values_from = n) %>%
+    mutate(Default = round(.[ , c(3)] / rowSums(.[ , c(2, 3)]), 2)) %>%
+    rename(!!!setNames(c(variable, 0, 1), c(variable_english, "No", "Yes")))
+    
   table <- tableGrob(table)
   
   combined <- grid.arrange(table, graph, nrow = 2)
 }
 
 # categorical variables: exploratory analysis
-contract_type <- combined(application, "name_contract_type_a") # mostly cash loans, higher default rate w cash loans
-gender <- combined(application, "code_gender_a") # women take out much more number of loans than men
+contract_type <- combined(application, "name_contract_type", "Contract Type") # mostly cash loans, higher default rate w cash loans
+gender <- combined(application, "code_gender", "Gender") # women take out much more number of loans than men
 # women have a lower default rate too
-own_car <- combined(application, "flag_own_car_a") # most clients do not own a car
-own_real_estate <- combined(application, "flag_own_realty_a") # most clients own a home
+own_car <- combined(application, "flag_own_car", "Own Car") # most clients do not own a car
+own_real_estate <- combined(application, "flag_own_realty", "Own Real Estate") # most clients own a home
 # interestingly, the default rate is about the same for those that own vs do not own a home (not intuitive)
-num_of_children <- combined(application, "cnt_children_capped_a") # those with no children have a lower default rate
-name_type <- combined(application, "name_type_suite_a") # not very helpful visual, this variable can be dropped
-income_type <- combined(application, "name_income_type_a")
-education_type <- combined(application, "name_education_type_a")
-family_status <- combined(application, "name_family_status_a")
-housing_type <- combined(application, "name_housing_type_a") # not very helpful visual, most are categorized under
+num_of_children <- combined(application, "cnt_children_capped", "Own Children") # those with no children have a lower default rate
+name_type <- combined(application, "name_type_suite", "Suite Type") # not very helpful visual, this variable can be dropped
+income_type <- combined(application, "name_income_type", "Income Type")
+education_type <- combined(application, "name_education_type", "Education Type")
+family_status <- combined(application, "name_family_status", "Family Status")
+housing_type <- combined(application, "name_housing_type", "Housing Type") # not very helpful visual, most are categorized under
 # House / apartment - this variable can be dropped
-own_car_age <- combined(application, "own_car_age_a") # most entries are NAs, drop the var
-mobile_flag <- combined(application, "flag_mobil_a") # most entries are in the 1 group, drop the var
-
-table <- application %>%
-  group_by(organization_type_a, target_a) %>%
-  summarize(n = n(), .groups = "drop") %>%
-  pivot_wider(., names_from = target_a, values_from = n) %>%
-  mutate(default_rate = round(.[ , c(3)] / rowSums(.[ , c(2, 3)]), 2))
-
+own_car_age <- combined(application, "own_car_age", "Own Car") # most entries are NAs, drop the var
+mobile_flag <- combined(application, "flag_mobil", "Phone Number Flag") # most entries are in the 1 group, drop the var
 
 # creating a list of categorical variables that need to be inspected w exploratory analysis
 cat_var <- c("flag_emp_phone_a", "flag_work_phone_a", "flag_cont_mobile_a", 
@@ -196,97 +191,51 @@ for (i in cat_var) {
   combined(application, {{i}})
 }
 
-# results based on looking at the plots created for the categorical variables
-# variables that can be dropped based on high correlation to other variables:
-
-
-# variables that need min/max capping: amt_req_credit_bureau_year_a (cap at 9),
-# amt_req_credit_bureau_qrt_a (cap at 4), amt_req_credit_bureau_mon_a (cap at 12),
-# amt_req_credit_bureau_week_a (cap at 2), amt_req_credit_bureau_day_a (cap at 1),
-# amt_req_credit_bureau_hour_a (cap at 1), def_60_cnt_social_circle_a (cap at 2),
-# obs_60_cnt_social_circle_a (cap at 5), 
-
-# variables to drop based on exploratory analysis
-application_vars_drop <- c("flag_mobil_a")
-
-x <- head(application)
-
 # defaulters vs non-defaulters for continuous variables in a graph
-combined_2 <- function(data, variable){
+combined_2 <- function(data, variable, variable_english){
   
   graph <- data %>%
     filter(!is.na(!!sym(variable))) %>%
-    mutate(target_a = factor(target_a)) %>%
-    group_by(!!sym(variable), target_a) %>%
+    mutate(target = factor(target, levels = c(0, 1), labels = c("No", "Yes"))) %>%
+    group_by(!!sym(variable), target) %>%
     summarize(n = n(), .groups = "drop") %>% # suppress warning message
-    ggplot(aes(x = !!sym(variable), fill = target_a)) +
+    ggplot(aes(x = !!sym(variable), fill = target)) +
     geom_density(alpha = 0.5) +
-    labs(y = "Density", title = "Number of Loans - Repaid vs Defaulted") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    labs(y = "Density", x = variable_english, title = "Number of Loans - Repaid vs Defaulted") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_fill_discrete(name = "Default")
   
   table <- data %>%
     mutate(!!sym(variable) := if_else(is.na(!!sym(variable)), "missing", "not missing")) %>%
     group_by(!!sym(variable)) %>%
-    summarize(n = n(), .groups = "drop") %>%
-    mutate(percentage = round(n / sum(n), 4))
+    summarize(Count = n(), .groups = "drop") %>%
+    mutate(Percentage = round(Count / sum(Count), 4)) %>%
+    rename(!!!setNames(variable, variable_english))
   
   table <- tableGrob(table)
   
   combined_2 <- grid.arrange(table, graph, nrow = 2)
 }
 
-
 # get rid of scientific notation
 scipen(option = 99999)
 
 # continuous variables: exploratory analysis
-ext_source_1_a <- combined_2(application, "ext_source_1_a") # density function looks really different between the two!
-ext_source_2_a <- combined_2(application, "ext_source_2_a") # looks different between the two
-ext_source_3_a <- combined_2(application, "ext_source_3_a") # does not look different between the two 
-credit <- combined_2(application, "amt_credit_a")
-age <- combined_2(application, "days_birth_in_years_a") # surprisingly no difference
-apartments_avg <- combined_2(application, "apartments_avg_a") # not much difference
-years_build_avg <- combined_2(application, "years_build_avg_a") # clients that live in homes constructed more 
+ext_source_1_a <- combined_2(application, "ext_source_1", "External Source 1") # density function looks really different between the two!
+ext_source_2_a <- combined_2(application, "ext_source_2", "External Source 2") # looks different between the two
+ext_source_3_a <- combined_2(application, "ext_source_3", "External Source 3") # does not look different between the two 
+credit <- combined_2(application, "amt_credit", "Credit Amount")
+age <- combined_2(application, "days_birth_in_years", "Age") # surprisingly no difference
+apartments_avg <- combined_2(application, "apartments_avg", "Apartment - Average") # not much difference
+years_build_avg <- combined_2(application, "years_build_avg", "Years Build - Average") # clients that live in homes constructed more 
 # recently have a higher default rate?
 
+# reading in the data
+application_imputed <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/application_imputed.csv", 
+                        col_names = TRUE)
 
+# converting column names to lower case for each dataset
+colnames(application_imputed) <- str_to_lower(colnames(application_imputed))
 
-
-cols_not_in_vector <- colnames(application)[!(colnames(application) %in% cat_var)]
-
-"amt_credit_a"                  
-[10] "amt_annuity_a"                  "amt_goods_price_a"                          
-[16] "name_housing_type_a"            "region_population_relative_a"                    
-[19] "days_employed_a"                "days_registration_a"            "days_id_publish_a"             
-[22] "own_car_age_a"                  "apartments_avg_a"              
-[28] "basementarea_avg_a"             "years_beginexpluatation_avg_a"  "years_build_avg_a"             
-[31] "commonarea_avg_a"               "elevators_avg_a"                "entrances_avg_a"               
-[34] "floorsmax_avg_a"                "floorsmin_avg_a"                "landarea_avg_a"                
-[37] "livingapartments_avg_a"         "livingarea_avg_a"               "nonlivingapartments_avg_a"     
-[40] "nonlivingarea_avg_a"            "apartments_mode_a"              "basementarea_mode_a"           
-[43] "years_beginexpluatation_mode_a" "years_build_mode_a"             "commonarea_mode_a"             
-[46] "elevators_mode_a"               "entrances_mode_a"               "floorsmax_mode_a"              
-[49] "floorsmin_mode_a"               "landarea_mode_a"                "livingapartments_mode_a"       
-[52] "livingarea_mode_a"              "nonlivingapartments_mode_a"     "nonlivingarea_mode_a"          
-[55] "apartments_medi_a"              "basementarea_medi_a"            "years_beginexpluatation_medi_a"
-[58] "years_build_medi_a"             "commonarea_medi_a"              "elevators_medi_a"              
-[61] "entrances_medi_a"               "floorsmax_medi_a"               "floorsmin_medi_a"              
-[64] "landarea_medi_a"                "livingapartments_medi_a"        "livingarea_medi_a"             
-[67] "nonlivingapartments_medi_a"     "nonlivingarea_medi_a"           "totalarea_mode_a"              
-[70] "emergencystate_mode_a"          "days_last_phone_change_a"      
-
-
-
-######### binning, capping, and transforming variables #########
-application <- application %>%
-  mutate(cnt_children_capped_a = if_else(cnt_children_a >=5, "5+", as.factor(cnt_children_a)),
-         days_birth_in_years_a = floor(-days_birth_a / 365.25))
-
-# need to transform days_birth_a, days_employed_a, days_registration_a, days_id_publish_a
-
-
-
-######### creating new variables from existing variables #########
-
-home_credit <- read_csv("/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/combined_data.csv")
-
+income_bracket <- combined(application_imputed, "income_bracket", "Income Bracket")
+years_of_employment <- combined_2(application_imputed, "employed_in_years", "Years of Employment")
