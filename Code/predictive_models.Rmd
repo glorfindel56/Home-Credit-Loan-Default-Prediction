@@ -1,0 +1,320 @@
+---
+title: "predictive models"
+output:
+  html_document: default
+  word_document:
+    fig_caption: yes
+    fig_height: 5
+    fig_width: 5
+    reference_docx: hw_template.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(kernlab)
+library(caret)
+library(dplyr)
+library(tidyverse)
+library(kernlab)
+library(ggplot2)
+library(GGally)
+library(factoextra)
+```
+
+importing data
+
+```{r importing data,results='hide',message=FALSE,cache=TRUE}
+data <-read_csv(file = "/Users/joycehu/Library/CloudStorage/Box-Box/MGT 6203/application_imputed.csv", col_names = TRUE)
+
+colnames(data) <- str_to_lower(colnames(data))
+
+# removing certain columns
+data <- data %>%
+  select(-c(has_children, married, has_children_num, education_level_num, 
+            age_in_years_num, married_num, code_gender_num, income_bracket_num))
+
+# adding feature engineering columns 
+# changing any NAs to a different name for modeling
+data <- data %>%
+  mutate(occupation_type_adj = replace_na(occupation_type, "Unknown"),
+         credit_to_income_ratio = amt_credit / amt_income_total,
+         credit_to_annuity_ratio = amt_credit / amt_annuity,
+         credit_to_goods_price_ratio = amt_credit / amt_goods_price)
+
+# setting up the data to be used for modeling
+# setting the categorical variables as factors
+# making sure the factor levels are valid R variable names
+# removing any "repetitive" data
+data <- data %>%
+  mutate(target = as.factor(target),
+         name_contract_type = as.factor(name_contract_type),
+         code_gender = as.factor(code_gender),
+         flag_own_car = as.factor(flag_own_car),
+         name_education_type = as.factor(name_education_type),
+         name_family_status = as.factor(name_family_status),
+         occupation_type_adj = as.factor(occupation_type_adj),
+         education_level = as.factor(education_level)) %>%
+  mutate(target = fct_recode(target, "No" = "0", "Yes" = "1")) %>%
+  select(-c(days_birth, # keeping year version instead
+            days_employed, # keeping year version instead
+            occupation_type # accounted for NAs in occupation_type_adj
+            ))
+
+# checking data type
+str(data)
+```
+
+1. Creating the training/validation and testing data sets and set the final_test_data aside to test the model picked by K-fold CV.
+
+```{r}
+#let's set a seed for reproducibility
+set.seed(5678) #random number
+
+# possible future enhancement is to try oversampling
+# first, separate dataset based on target = 0 and target = 1
+data_0 <- data %>% 
+  filter(target == "No")
+data_1 <- data %>%
+  filter(target == "Yes")
+
+# separate the dataset into 80/20 (80% training and validation for cross validation and 20% for test)
+n_0 <- sum(data$target == "No")
+n_1 <- sum(data$target == "Yes")
+split_value <- 0.80
+
+#we are randomly shuffling the entire dataset and then splitting it up according the the split_value we set above.
+training_valid_data_points_0 <- sample(x = 1:n_0, size = as.integer(split_value*n_0), replace = FALSE)
+training_valid_data_points_1 <- sample(x = 1:n_1, size = as.integer(split_value*n_1), replace = FALSE)
+
+# subsetting the data based on target = 0 and target = 1 to get the same distribution for the target variable in 
+# the train/validation/test datasets
+
+# train/validation dataset that will be used for k-fold cross-validation
+train_valid_data_0 <- data_0[training_valid_data_points_0, ]
+train_valid_data_1 <- data_1[training_valid_data_points_1, ]
+# merging the separate train/validation datasets into one
+train_valid_data <- bind_rows(train_valid_data_0, train_valid_data_1)
+
+# final dataset that will be used to analyze how well the best model (from k-fold cross-validation) performs
+final_test_data_0 <- data_0[-training_valid_data_points_0, ]
+final_test_data_1 <- data_1[-training_valid_data_points_1, ]
+# merging the separate test datasets into one
+final_test_data <- bind_rows(final_test_data_0, final_test_data_1)
+
+#need to scale data (standardize and normalize)
+
+# remove unneeded datasets to clear up memory space
+rm(data_0)
+rm(data_1)
+rm(train_valid_data_0)
+rm(train_valid_data_1)
+rm(final_test_data_0)
+rm(final_test_data_1)
+```
+
+2. Set up k-folds cross validation. In 6501, Professor Sokol mentioned k=10 is a good value to use. It's not necessarily always the most optimal but smaller values of k (e.g \<5) can lead to higher variance in performance estimate because the evaluation is based on fewer data points which larger k's (\>20) can lead to higher bias in the estimate because each fold contains a smaller portion of the data.
+
+First, I define the function for running predictive models and obtain the AUROC (area under the ROC curve).
+
+```{r, logistic_regression, message=FALSE}
+# install.packages("gbm")
+library(pROC)
+library(gbm)
+
+# setting seed for reproducibility
+set.seed(5678)
+
+# creating binary variable for response / dependent variable
+train_valid_data <- train_valid_data %>%
+  mutate(target_binary = if_else(target == "No", 0, 1))
+
+final_test_data <- final_test_data %>%
+  mutate(target_binary = if_else(target == "No", 0, 1))
+
+# define the function for running predictive models
+model_type <- function(formula, method_input, metric_input) {
+# method_input = predictive model we would like to try out (ex: logistic regression, knn, gbm, svm, etc)
+# metric_input = what metric we want to use to evaluate the best fit model
+# Define your k-fold cross-validation control
+control <- trainControl(method = "cv", number = 5, classProbs = TRUE, summaryFunction = twoClassSummary, savePredictions = T)
+# model used on training data
+model <- train(formula, data = train_valid_data, method = method_input, 
+                tuneLength = 5, preProcess = c("center", "scale"),  
+                trControl = control, metric = metric_input)
+}
+
+# make predictions based on the predictive model used
+# plot the predictions based on different probability cutoffs (ROC curve) + calculate AUC
+predictions <- function(model_name, model_name_text, model_type_text){
+predictions_df <- data.frame(
+         obs = final_test_data$target_binary, ## observed class labels
+         predict(model_name, newdata = final_test_data, type = "prob"), ## predicted class probabilities
+         pred = if_else(predict(model_name, newdata = final_test_data, type = "raw") == "No", 0, 1) ## predicted class labels
+     ) 
+
+roc_curve <- roc(final_test_data$target_binary, predictions_df[, 3])
+pdf(paste0("roc_curve_", model_name_text, ".pdf"))
+roc_plot <- plot(roc_curve, main = paste0("ROC Curve - ", model_type_text), col = "blue", lwd = 2)
+# Add AUC annotation
+text(0.2, 0.2, paste0("AUC = ", round(auc(roc_curve), 4)), col = "blue")
+dev.off()
+}
+
+# Support Vector Machines with Radial Basis Function Kernel
+# tuning sigma (sigma) and c (cost)
+# Sigma in support vector machines helps decide how closely the lines are drawn to the dots.
+# If you choose it just right, you can separate the dots into groups really well!)
+# Think back to visual graphs that Dr. Sokol used to teach us SVM in ISYE 6501!
+# set.seed(5678)
+# svm <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + amt_income_total +
+#   amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+#   credit_to_goods_price_ratio, method_input = "svmRadial", metric_input = "Accuracy")
+
+# Logistic Regression
+# set.seed(5678)
+# logistic_regression <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+#   credit_to_goods_price_ratio, method_input = "glm", metric_input = "Accuracy")
+
+# Bagged CART
+# set.seed(5678)
+# cart <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+#   credit_to_goods_price_ratio, method_input = "treebag", metric_input = "Accuracy")
+
+# Random Forest
+# set.seed(5678)
+# random_forest <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+#   credit_to_goods_price_ratio, method_input = "rf", metric_input = "Accuracy")
+
+# GBM - Gradient Boosting Machine
+# set.seed(5678)
+# gbm <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status +
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle +
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket +
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio +
+#   credit_to_goods_price_ratio, method_input = "gbm", metric_input = "Accuracy")
+
+# KNN - K-Nearest Neighbors
+# set.seed(5678)
+# knn <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + 
+#   ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+#   obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+#   education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+#   occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+#   credit_to_goods_price_ratio, method_input = "knn", metric_input = "Accuracy")
+
+########## GLMNET - Regularized Logistic Regression ##########
+
+# model 1 - tests out all predictive variables in the dataset
+# test ROC = 0.7268120, alpha = 0.100, lambda = 0.0000425205, spec = 2.316213e-03
+# only tested out 5 different levels for each hyperparameter due to lack of computing power
+set.seed(5678)
+regularized_logistic_regression_1 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year +
+  education_level + age_in_years + age_bucket + employed_in_years + income_bracket + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+predictions(regularized_logistic_regression_1, "logistic_regression_1", "Logistic Regression")
+
+# model 2 - only tests out name_education_type
+# test ROC = 0.7268027, alpha = 0.100, lambda = 0.0000425205, spec = 2.316213e-03
+set.seed(5678)
+regularized_logistic_regression_2 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_in_years + age_bucket + employed_in_years + income_bracket + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+# model 3 - only tests out education_level
+# test ROC = 0.7267437, alpha = 0.100, lambda = 0.0000425205, spec = 2.316213e-03
+set.seed(5678)
+regularized_logistic_regression_3 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + education_level + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_in_years + age_bucket + employed_in_years + income_bracket + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+# remove education_level since it returns a lower AUC
+
+# model 4 - only tests out age_in_years
+set.seed(5678)
+regularized_logistic_regression_4 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_in_years + employed_in_years + income_bracket + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+# model 5 - only tests out age_bucket
+set.seed(5678)
+regularized_logistic_regression_5 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_bucket + employed_in_years + income_bracket + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+# remove age_bucket since it returns a lower AUC
+
+# model 6 - only tests out amount_income_total
+set.seed(5678)
+regularized_logistic_regression_6 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children +  amt_income_total + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_in_years + employed_in_years + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+# model 7 - only tests out income_bracket
+set.seed(5678)
+regularized_logistic_regression_7 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + income_bracket + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + 
+  obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_in_years + employed_in_years + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+# remove amt_income_total since it returns a lower AUC
+
+# model 8 - testing out 30_cnt only
+set.seed(5678)
+regularized_logistic_regression_8 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + income_bracket + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_in_years + employed_in_years + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+predictions(regularized_logistic_regression_8, "logistic_regression_8", "Logistic Regression")
+
+# model 9 - testing out 60_cnt only
+set.seed(5678)
+regularized_logistic_regression_9 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + income_bracket + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_60_cnt_social_circle + def_60_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_in_years + employed_in_years + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "glmnet", metric_input = "ROC")
+
+# removing obs_60_cnt_social_circle, def_60_cnt_social_circle since it returns a lower AUC
+
+# final logistic regression model is model 8!
+
+# Get the coefficients of the fitted model
+coefficients_8 <- coef(regularized_logistic_regression_8$finalModel, s = regularized_logistic_regression_8$bestTune$lambda)
+
+# Print coefficients
+print(coefficients_8)
+
+########## GBM - Gradient Boosting Machines ##########
+
+# model 1 - using the same formula as regularized_logistic_regression_8
+set.seed(5678)
+gbm_1 <- model_type(target ~ name_contract_type + code_gender + flag_own_car + cnt_children + income_bracket + amt_credit + amt_annuity + amt_goods_price + name_education_type + name_family_status + ext_source_1 + ext_source_2 + obs_30_cnt_social_circle + def_30_cnt_social_circle + days_last_phone_change + amt_req_credit_bureau_year + age_in_years + employed_in_years + 
+  occupation_type_adj + credit_to_income_ratio + credit_to_annuity_ratio + 
+  credit_to_goods_price_ratio, method_input = "gbm", metric_input = "ROC")
+
+predictions(gbm_1, "gbm_1", "GBM")
+```
+
