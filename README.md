@@ -112,7 +112,7 @@ To measure model performance, we used the Area under the Receiver Operating Char
 # Results
 
 
-Based on the test AUROC metric, we selected the regularized logistic regression model as the predictive model for Home Credit. Although the GBM model returned the highest test AUROC, logistic regression was chosen for its interpretability, regulatory compliance, and stakeholder acceptance.
+Based on the test AUROC metric, we selected the regularized logistic regression model as the predictive model for Home Credit (AUROC = 0.7246). Although the GBM model returned the highest test AUROC (0.7467), logistic regression was chosen for its interpretability, regulatory compliance, and stakeholder acceptance.
 
 # Conclusion
 
